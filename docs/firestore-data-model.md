@@ -24,17 +24,34 @@ updatedAt: timestamp
 
 Guest preferences are stored in browser `sessionStorage` only. Uploaded resume files and extracted text remain in request/browser memory and are never written to Firestore.
 
-At the final intake step, the UI can assemble the in-memory `ResumeAnalysisInput` type from the parsed resume and validated preferences. This is the handoff boundary for a later AI layer; nothing consumes or persists that payload in this iteration.
+At the final intake step, the UI assembles an in-memory `ResumeAnalysisInput` from the parsed resume and validated preferences. The server sends this data to Gemini for structured extraction. The returned profile stays in browser memory for the current flow and is not persisted by ResumeMatch.
 
-## Reserved AI profile data
+## Session-only AI profile data
 
-Future AI-created resume profiles have the reserved path:
+The current AI profile contains:
+
+```text
+summary: string
+skills: string[]
+experienceLevel: "entry" | "mid" | "senior" | "lead" | "executive" | "unknown"
+recentJobTitles: string[]
+targetRoles: string[]
+searchKeywords: string[]
+preferences.targetLocation: string
+preferences.minimumSalary: integer
+```
+
+This profile prepares the data needed by a future job-search step. The current application does not search for jobs, score matches, or write the profile to Firestore.
+
+## Reserved future persistence
+
+If profile persistence is added later, AI-created resume profiles have the reserved path:
 
 ```text
 users/{uid}/resumeProfiles/{profileId}
 ```
 
-A future profile can contain fields such as:
+A future persisted profile could contain fields such as:
 
 ```text
 summary: string
@@ -46,7 +63,7 @@ searchKeywords: string[]
 analyzedAt: timestamp
 ```
 
-This iteration does not create profile documents, empty placeholders, or fake AI values. Firestore rules deny all access to the reserved collection until the AI feature and its schema validation are implemented.
+This iteration does not create profile documents or empty placeholders. Firestore rules continue to deny all access to the reserved collection until persistence and its schema validation are implemented in a separate iteration.
 
 ## Security boundary
 

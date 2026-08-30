@@ -87,11 +87,13 @@ describe("JobPreferences", () => {
       }),
     );
 
+    await waitFor(() =>
+      expect(onReadyChange).toHaveBeenLastCalledWith(SAVED_PREFERENCES),
+    );
     expect(
-      await screen.findByRole("heading", { name: "Ready for AI Analysis" }),
-    ).toBeTruthy();
+      screen.queryByRole("heading", { name: "Ready for AI Analysis" }),
+    ).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(onReadyChange).toHaveBeenLastCalledWith(SAVED_PREFERENCES);
   });
 
   it("updates edited signed-in preferences with a fresh bearer token", async () => {
@@ -133,10 +135,12 @@ describe("JobPreferences", () => {
         body: JSON.stringify(updatedPreferences),
       }),
     );
+    await waitFor(() =>
+      expect(onReadyChange).toHaveBeenLastCalledWith(updatedPreferences),
+    );
     expect(
-      await screen.findByRole("heading", { name: "Ready for AI Analysis" }),
-    ).toBeTruthy();
-    expect(onReadyChange).toHaveBeenLastCalledWith(updatedPreferences);
+      screen.queryByRole("heading", { name: "Ready for AI Analysis" }),
+    ).toBeNull();
     expect(user.getIdToken).toHaveBeenCalledTimes(2);
   });
 
@@ -158,9 +162,15 @@ describe("JobPreferences", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
+    await waitFor(() =>
+      expect(onReadyChange).toHaveBeenLastCalledWith({
+        targetLocation: "Remote",
+        minimumSalary: 99000,
+      }),
+    );
     expect(
-      await screen.findByRole("heading", { name: "Ready for AI Analysis" }),
-    ).toBeTruthy();
+      screen.queryByRole("heading", { name: "Ready for AI Analysis" }),
+    ).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
     expect(window.sessionStorage.getItem("resumematch:guest-session:v1")).toContain(
       '"targetLocation":"Remote"',

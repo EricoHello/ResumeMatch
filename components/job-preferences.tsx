@@ -108,11 +108,9 @@ export function JobPreferences({
   );
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [message, setMessage] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
   const dirtyRef = useRef(false);
   const requestRef = useRef<AbortController | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
-  const readyHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const signedInUser = identity.kind === "user" ? identity.user : null;
 
   const loadPreferences = useCallback(async () => {
@@ -186,17 +184,10 @@ export function JobPreferences({
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
-  useEffect(() => {
-    if (!ready) return;
-    const frame = window.requestAnimationFrame(() => readyHeadingRef.current?.focus());
-    return () => window.cancelAnimationFrame(frame);
-  }, [ready]);
-
   const markChanged = () => {
     dirtyRef.current = true;
     setSaveState("idle");
     setMessage(null);
-    setReady(false);
     onReadyChange(null);
   };
 
@@ -235,7 +226,6 @@ export function JobPreferences({
     if (samePreferences(lastSaved, preferences)) {
       dirtyRef.current = false;
       setSaveState("idle");
-      setReady(true);
       onReadyChange(preferences);
       return;
     }
@@ -244,7 +234,6 @@ export function JobPreferences({
       saveGuestPreferences(preferences);
       dirtyRef.current = false;
       setLastSaved(preferences);
-      setReady(true);
       onReadyChange(preferences);
       return;
     }
@@ -289,7 +278,6 @@ export function JobPreferences({
       setMinimumSalary(String(savedPreferences.minimumSalary));
       setLastSaved(savedPreferences);
       setSaveState("idle");
-      setReady(true);
       onReadyChange(savedPreferences);
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -310,7 +298,7 @@ export function JobPreferences({
     <section className="preferences-card" aria-labelledby="preferences-heading">
       <div className="card-heading">
         <div>
-          <p className="step-label">Step 2 of 2</p>
+          <p className="step-label">Step 2 of 3</p>
           <h2 id="preferences-heading" ref={headingRef} tabIndex={-1}>
             Job preferences
           </h2>
@@ -405,6 +393,21 @@ export function JobPreferences({
           <p className="form-error" role="alert">{message}</p>
         )}
 
+        <p className="analysis-consent-note">
+          Continuing sends your extracted resume text and preferences to Gemini for
+          AI analysis. ResumeMatch does not persist the resume text or generated
+          profile. Google states that free-tier submitted content may be used to
+          improve its products; review the{" "}
+          <a
+            href="https://ai.google.dev/gemini-api/docs/pricing"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Gemini API pricing and data-use terms
+          </a>
+          .
+        </p>
+
         <div className="preference-actions">
           <p>
             {identity.kind === "guest"
@@ -428,20 +431,6 @@ export function JobPreferences({
         </div>
       </form>
 
-      {ready && (
-        <section className="ready-panel" aria-labelledby="ready-heading">
-          <p className="success-label">
-            <span aria-hidden="true">✓</span> Intake complete
-          </p>
-          <h2 id="ready-heading" ref={readyHeadingRef} tabIndex={-1}>
-            Ready for AI Analysis
-          </h2>
-          <p>
-            Your extracted resume text and job preferences are ready. AI analysis
-            will be added in the next iteration.
-          </p>
-        </section>
-      )}
     </section>
   );
 }

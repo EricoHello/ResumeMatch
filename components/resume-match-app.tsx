@@ -14,10 +14,17 @@ import {
   type PreferenceIdentity,
 } from "@/components/job-preferences";
 import {
+  ResumeAnalysis,
+  type ResumeAnalysisState,
+} from "@/components/resume-analysis";
+import {
   ResumeUploader,
   type ResumeParseResult,
 } from "@/components/resume-uploader";
-import type { ResumeAnalysisInput } from "@/lib/analysis/types";
+import {
+  analyzeResume,
+  ResumeAnalysisClientError,
+} from "@/lib/analysis/client";
 import {
   getFirebaseClient,
   isFirebaseClientConfigured,
@@ -63,7 +70,14 @@ function ResumeJourney({ identity }: { identity: PreferenceIdentity }) {
   const [resume, setResume] = useState<ResumeParseResult | null>(null);
   const [readyPreferences, setReadyPreferences] =
     useState<JobPreferencesValue | null>(null);
+  const [analysisState, setAnalysisState] =
+    useState<ResumeAnalysisState | null>(null);
   const journeyRef = useRef<HTMLDivElement | null>(null);
+  const analysisRequestRef = useRef<AbortController | null>(null);
+  const lastAutomaticAttemptRef = useRef<{
+    resume: ResumeParseResult;
+    preferences: JobPreferencesValue;
+  } | null>(null);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -73,30 +87,136 @@ function ResumeJourney({ identity }: { identity: PreferenceIdentity }) {
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
-  const handleResultChange = useCallback((nextResult: ResumeParseResult | null) => {
-    setResume(nextResult);
-    setReadyPreferences(null);
+  useEffect(() => {
+    return () => {
+      analysisRequestRef.current?.abort();
+      analysisRequestRef.current = null;
+    };
   }, []);
 
-  const handleReadyChange = useCallback(
-    (preferences: JobPreferencesValue | null) =>
-      setReadyPreferences(preferences),
+  const clearAnalysis = useCallback(() => {
+    analysisRequestRef.current?.abort();
+    analysisRequestRef.current = null;
+    lastAutomaticAttemptRef.current = null;
+    setAnalysisState(null);
+  }, []);
+
+  const handleResultChange = useCallback((nextResult: ResumeParseResult | null) => {
+    analysisRequestRef.current?.abort();
+    analysisRequestRef.current = null;
+    lastAutomaticAttemptRef.current = null;
+    setResume(nextResult);
+    setReadyPreferences(null);
+    setAnalysisState(null);
+  }, []);
+
+  const runAnalysis = useCallback(
+    async (
+      resumeToAnalyze: ResumeParseResult,
+      preferences: JobPreferencesValue,
+      retry = false,
+    ) => {
+      const previousAttempt = lastAutomaticAttemptRef.current;
+      if (
+        !retry &&
+        previousAttempt?.resume === resumeToAnalyze &&
+        previousAttempt.preferences.targetLocation === preferences.targetLocation &&
+        previousAttempt.preferences.minimumSalary === preferences.minimumSalary
+      ) {
+        return;
+      }
+
+      analysisRequestRef.current?.abort();
+      const controller = new AbortController();
+      analysisRequestRef.current = controller;
+      lastAutomaticAttemptRef.current = {
+        resume: resumeToAnalyze,
+        preferences,
+      };
+      setAnalysisState({ status: "loading" });
+
+      try {
+        const profile = await analyzeResume(
+          {
+            resumeText: resumeToAnalyze.text,
+            preferences,
+          },
+          controller.signal,
+        );
+
+        if (
+          controller.signal.aborted ||
+          analysisRequestRef.current !== controller
+        ) {
+          return;
+        }
+        setAnalysisState({ status: "success", profile });
+      } catch (error) {
+        if (
+          controller.signal.aborted ||
+          analysisRequestRef.current !== controller
+        ) {
+          return;
+        }
+        setAnalysisState({
+          status: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "We couldn’t analyze your resume. Please try again.",
+          retryAfterSeconds:
+            error instanceof ResumeAnalysisClientError && error.status === 429
+              ? error.retryAfterSeconds
+              : undefined,
+        });
+      } finally {
+        if (analysisRequestRef.current === controller) {
+          analysisRequestRef.current = null;
+        }
+      }
+    },
     [],
   );
-  const analysisInput: ResumeAnalysisInput | null =
-    resume && readyPreferences
-      ? { resume, preferences: readyPreferences }
-      : null;
+
+  const handleReadyChange = useCallback(
+    (preferences: JobPreferencesValue | null) => {
+      setReadyPreferences(preferences);
+
+      if (!preferences || !resume) {
+        clearAnalysis();
+        return;
+      }
+
+      void runAnalysis(resume, preferences);
+    },
+    [clearAnalysis, resume, runAnalysis],
+  );
+
+  const retryAnalysis = useCallback(() => {
+    if (!resume || !readyPreferences) return;
+    void runAnalysis(resume, readyPreferences, true);
+  }, [readyPreferences, resume, runAnalysis]);
 
   return (
     <div
       ref={journeyRef}
       className="resume-journey"
-      data-flow-step={analysisInput ? "ready" : resume ? "preferences" : "upload"}
+      data-flow-step={
+        analysisState?.status === "success"
+          ? "analysis-complete"
+          : analysisState
+            ? "analysis"
+            : resume
+              ? "preferences"
+              : "upload"
+      }
     >
       <ResumeUploader onResultChange={handleResultChange} />
       {resume && (
         <JobPreferences identity={identity} onReadyChange={handleReadyChange} />
+      )}
+      {analysisState && (
+        <ResumeAnalysis state={analysisState} onRetry={retryAnalysis} />
       )}
     </div>
   );
@@ -255,7 +375,7 @@ export function ResumeMatchApp() {
           <span className="brand-mark" aria-hidden="true">R</span>
           <span>ResumeMatch</span>
         </a>
-        <span className="version-pill">Resume intake</span>
+        <span className="version-pill">AI resume intake</span>
       </nav>
 
       <div className="page-content" id="top">
@@ -263,9 +383,8 @@ export function ResumeMatchApp() {
           <p className="eyebrow">Resume ingestion, simplified</p>
           <h1>See what your resume says, in plain text.</h1>
           <p className="hero-copy">
-            Upload a PDF or DOCX resume, review the extracted text, and add your job
-            preferences. No AI interpretation yet—just a clean foundation for the
-            next step.
+            Upload a PDF or DOCX resume, add your job preferences, and turn it into
+            a structured profile for more relevant opportunities.
           </p>
         </header>
 
@@ -365,10 +484,11 @@ export function ResumeMatchApp() {
               <svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M10 1.75a4 4 0 0 0-4 4v2H5A1.75 1.75 0 0 0 3.25 9.5v6.75A1.75 1.75 0 0 0 5 18h10a1.75 1.75 0 0 0 1.75-1.75V9.5A1.75 1.75 0 0 0 15 7.75h-1v-2a4 4 0 0 0-4-4Zm2.5 6h-5v-2a2.5 2.5 0 0 1 5 0v2Z" />
               </svg>
-              Resume files are processed in memory and are not saved. {identity.kind === "user"
+              Resume files and AI profiles are not saved. {identity.kind === "user"
                 ? "Your job preferences are saved to your account. "
                 : "Guest preferences stay only in this browser tab. "}
-              This version does not evaluate or score your resume.
+              Extracted text is sent to Gemini only when you continue from job
+              preferences.
             </p>
           </>
         )}
