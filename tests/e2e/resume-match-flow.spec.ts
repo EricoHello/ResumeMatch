@@ -196,6 +196,46 @@ test("offers Google Sign-In and guest mode before showing the uploader", async (
   await expect(page.getByLabel("Upload resume")).toHaveCount(0);
 });
 
+test("shows guest Account details and returns to the active matching session", async ({
+  page,
+}) => {
+  const preferenceRequests = watchPreferenceRequests(page);
+  await mockSuccessfulAnalysis(page);
+
+  await enterGuestMode(page);
+  await uploadPdfResume(page);
+  await page.getByLabel("Target city or location").fill("Remote");
+  await page.getByLabel("Minimum acceptable salary").fill("95000");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your resume is ready for the next step" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Account", exact: true }),
+  ).toBeVisible();
+  const accountPage = page.getByLabel("Account", { exact: true });
+  await expect(accountPage.getByText("Guest status")).toBeVisible();
+  await expect(accountPage.getByText("Remote", { exact: true })).toBeVisible();
+  await expect(accountPage.getByText("$95,000 / year", { exact: true })).toBeVisible();
+  await expect(
+    accountPage.getByText("Staff Software Engineer", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    accountPage.getByRole("button", { name: "Sign in with Google" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Back to resume matching" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your resume is ready for the next step" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Extracted resume text")).toContainText(
+    PDF_RESUME_TEXT.name,
+  );
+  expect(preferenceRequests).toHaveLength(0);
+});
+
 test("completes analysis and one live search for three guest job matches", async ({
   page,
 }) => {

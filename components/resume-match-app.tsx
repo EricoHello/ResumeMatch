@@ -13,6 +13,7 @@ import {
   JobPreferences,
   type PreferenceIdentity,
 } from "@/components/job-preferences";
+import { Account } from "@/components/account";
 import { JobSearch } from "@/components/job-search";
 import {
   ResumeAnalysis,
@@ -31,6 +32,7 @@ import {
   isFirebaseClientConfigured,
 } from "@/lib/firebase/client";
 import type { JobPreferences as JobPreferencesValue } from "@/lib/preferences/types";
+import type { ResumeProfile } from "@/lib/analysis/types";
 import {
   beginGuestSession,
   clearGuestSession,
@@ -42,6 +44,8 @@ type AuthState =
   | { status: "choice" }
   | { status: "guest" }
   | { status: "user"; user: User };
+
+type AppView = "match" | "account";
 
 function readableAuthError(error: unknown) {
   if (typeof error === "object" && error !== null && "code" in error) {
@@ -67,7 +71,13 @@ function GoogleIcon() {
   );
 }
 
-function ResumeJourney({ identity }: { identity: PreferenceIdentity }) {
+function ResumeJourney({
+  identity,
+  onProfileChange,
+}: {
+  identity: PreferenceIdentity;
+  onProfileChange: (profile: ResumeProfile | null) => void;
+}) {
   const [resume, setResume] = useState<ResumeParseResult | null>(null);
   const [readyPreferences, setReadyPreferences] =
     useState<JobPreferencesValue | null>(null);
@@ -100,7 +110,8 @@ function ResumeJourney({ identity }: { identity: PreferenceIdentity }) {
     analysisRequestRef.current = null;
     lastAutomaticAttemptRef.current = null;
     setAnalysisState(null);
-  }, []);
+    onProfileChange(null);
+  }, [onProfileChange]);
 
   const handleResultChange = useCallback((nextResult: ResumeParseResult | null) => {
     analysisRequestRef.current?.abort();
@@ -109,7 +120,8 @@ function ResumeJourney({ identity }: { identity: PreferenceIdentity }) {
     setResume(nextResult);
     setReadyPreferences(null);
     setAnalysisState(null);
-  }, []);
+    onProfileChange(null);
+  }, [onProfileChange]);
 
   const runAnalysis = useCallback(
     async (
@@ -152,6 +164,7 @@ function ResumeJourney({ identity }: { identity: PreferenceIdentity }) {
           return;
         }
         setAnalysisState({ status: "success", profile });
+        onProfileChange(profile);
       } catch (error) {
         if (
           controller.signal.aborted ||
@@ -176,7 +189,7 @@ function ResumeJourney({ identity }: { identity: PreferenceIdentity }) {
         }
       }
     },
-    [],
+    [onProfileChange],
   );
 
   const handleReadyChange = useCallback(
@@ -228,9 +241,15 @@ function ResumeJourney({ identity }: { identity: PreferenceIdentity }) {
 
 export function ResumeMatchApp() {
   const [authState, setAuthState] = useState<AuthState>({ status: "loading" });
+  const [activeView, setActiveView] = useState<AppView>("match");
+  const [sessionProfile, setSessionProfile] = useState<{
+    identityKey: string;
+    profile: ResumeProfile;
+  } | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const choiceHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const mainHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const firebaseAvailable = isFirebaseClientConfigured();
 
   useEffect(() => {
@@ -277,10 +296,13 @@ export function ResumeMatchApp() {
 
             if (user) {
               clearGuestSession();
+              setSessionProfile(null);
               setAuthState({ status: "user", user });
               return;
             }
 
+            setActiveView("match");
+            setSessionProfile(null);
             setAuthState(
               readGuestSession() ? { status: "guest" } : { status: "choice" },
             );
@@ -341,12 +363,15 @@ export function ResumeMatchApp() {
 
   const continueAsGuest = () => {
     beginGuestSession();
+    setSessionProfile(null);
     setAuthMessage(null);
     setAuthState({ status: "guest" });
   };
 
   const leaveGuestMode = () => {
     clearGuestSession();
+    setActiveView("match");
+    setSessionProfile(null);
     setAuthMessage(null);
     setAuthState({ status: "choice" });
   };
@@ -359,6 +384,8 @@ export function ResumeMatchApp() {
     setAuthMessage(null);
     try {
       await signOut(firebase.auth);
+      setActiveView("match");
+      setSessionProfile(null);
     } catch {
       setAuthBusy(false);
       setAuthMessage("We couldn’t sign you out. Please try again.");
@@ -371,76 +398,123 @@ export function ResumeMatchApp() {
       : authState.status === "user"
         ? ({ kind: "user", user: authState.user } as const)
         : null;
+  const identityKey = identity
+    ? identity.kind === "user"
+      ? `user:${identity.user.uid}`
+      : "guest"
+    : null;
+
+  const currentProfile =
+    identityKey && sessionProfile?.identityKey === identityKey
+      ? sessionProfile.profile
+      : null;
+
+  const showMatchView = () => {
+    setActiveView("match");
+    window.requestAnimationFrame(() => mainHeadingRef.current?.focus());
+  };
+
+  const handleProfileChange = useCallback(
+    (profile: ResumeProfile | null) => {
+      if (!identityKey || !profile) {
+        setSessionProfile(null);
+        return;
+      }
+
+      setSessionProfile({ identityKey, profile });
+    },
+    [identityKey],
+  );
 
   return (
     <main className="page-shell">
       <nav className="site-nav" aria-label="Primary navigation">
-        <a className="brand" href="#top" aria-label="ResumeMatch home">
+        <a
+          className="brand"
+          href="#top"
+          aria-label="ResumeMatch home"
+          onClick={showMatchView}
+        >
           <span className="brand-mark" aria-hidden="true">R</span>
           <span>ResumeMatch</span>
         </a>
-        <span className="version-pill">AI resume intake</span>
+        <div className="nav-actions">
+          <span className="version-pill">AI resume intake</span>
+          {identity && (
+            <button
+              className="nav-account-button"
+              type="button"
+              aria-current={activeView === "account" ? "page" : undefined}
+              onClick={() => setActiveView("account")}
+            >
+              Account
+            </button>
+          )}
+        </div>
       </nav>
 
       <div className="page-content" id="top">
-        <header className="hero">
-          <p className="eyebrow">Resume ingestion, simplified</p>
-          <h1>See what your resume says, in plain text.</h1>
-          <p className="hero-copy">
-            Upload a PDF or DOCX resume, add your job preferences, and turn it into
-            a structured profile for more relevant opportunities.
-          </p>
-        </header>
-
-        {authState.status === "loading" && (
-          <section className="auth-card auth-card--loading" aria-label="Loading account">
-            <span className="spinner" aria-hidden="true" />
-            <p role="status">Restoring your session…</p>
-          </section>
-        )}
-
-        {authState.status === "choice" && (
-          <section className="auth-card" aria-labelledby="access-heading">
-            <p className="step-label">Get started</p>
-            <h2 id="access-heading" ref={choiceHeadingRef} tabIndex={-1}>
-              Choose how to continue
-            </h2>
-            <p className="auth-copy">
-              Sign in to save preferences across visits, or use a private guest
-              session in this tab.
+        <div hidden={activeView !== "match"}>
+          <header className="hero">
+            <p className="eyebrow">Resume ingestion, simplified</p>
+            <h1 ref={mainHeadingRef} tabIndex={-1}>
+              See what your resume says, in plain text.
+            </h1>
+            <p className="hero-copy">
+              Upload a PDF or DOCX resume, add your job preferences, and turn it into
+              a structured profile for more relevant opportunities.
             </p>
-            <div className="auth-actions">
-              <button
-                className="google-button"
-                type="button"
-                disabled={authBusy || !firebaseAvailable}
-                onClick={() => void googleSignIn()}
-              >
-                <GoogleIcon />
-                {authBusy ? "Opening Google…" : "Sign in with Google"}
-              </button>
-              <button
-                className="secondary-button auth-secondary-button"
-                type="button"
-                disabled={authBusy}
-                onClick={continueAsGuest}
-              >
-                Continue as Guest
-              </button>
-            </div>
-            {!firebaseAvailable && (
-              <p className="configuration-note">
-                Google Sign-In isn’t available in this environment. Guest mode still
-                works normally.
-              </p>
-            )}
-            {authMessage && <p className="form-error" role="alert">{authMessage}</p>}
-          </section>
-        )}
+          </header>
 
-        {identity && (
-          <>
-            <aside className="account-strip" aria-label="Account status">
+          {authState.status === "loading" && (
+            <section className="auth-card auth-card--loading" aria-label="Loading account">
+              <span className="spinner" aria-hidden="true" />
+              <p role="status">Restoring your session…</p>
+            </section>
+          )}
+
+          {authState.status === "choice" && (
+            <section className="auth-card" aria-labelledby="access-heading">
+              <p className="step-label">Get started</p>
+              <h2 id="access-heading" ref={choiceHeadingRef} tabIndex={-1}>
+                Choose how to continue
+              </h2>
+              <p className="auth-copy">
+                Sign in to save preferences across visits, or use a private guest
+                session in this tab.
+              </p>
+              <div className="auth-actions">
+                <button
+                  className="google-button"
+                  type="button"
+                  disabled={authBusy || !firebaseAvailable}
+                  onClick={() => void googleSignIn()}
+                >
+                  <GoogleIcon />
+                  {authBusy ? "Opening Google…" : "Sign in with Google"}
+                </button>
+                <button
+                  className="secondary-button auth-secondary-button"
+                  type="button"
+                  disabled={authBusy}
+                  onClick={continueAsGuest}
+                >
+                  Continue as Guest
+                </button>
+              </div>
+              {!firebaseAvailable && (
+                <p className="configuration-note">
+                  Google Sign-In isn’t available in this environment. Guest mode still
+                  works normally.
+                </p>
+              )}
+              {authMessage && <p className="form-error" role="alert">{authMessage}</p>}
+            </section>
+          )}
+
+          {identity && (
+            <>
+              <aside className="account-strip" aria-label="Account status">
               <div className="account-copy">
                 <span className="account-dot" aria-hidden="true" />
                 <span>
@@ -457,32 +531,22 @@ export function ResumeMatchApp() {
                   )}
                 </span>
               </div>
-              <div className="account-actions">
-                {identity.kind === "guest" && firebaseAvailable && (
-                  <button type="button" disabled={authBusy} onClick={() => void googleSignIn()}>
-                    Sign in with Google
-                  </button>
-                )}
                 <button
+                  className="account-strip-link"
                   type="button"
-                  disabled={authBusy}
-                  onClick={
-                    identity.kind === "user"
-                      ? () => void googleSignOut()
-                      : leaveGuestMode
-                  }
+                  onClick={() => setActiveView("account")}
                 >
-                  {identity.kind === "user" ? "Sign out" : "Exit guest mode"}
+                  View account
                 </button>
-              </div>
-            </aside>
+              </aside>
 
-            {authMessage && <p className="account-error" role="alert">{authMessage}</p>}
+              {authMessage && <p className="account-error" role="alert">{authMessage}</p>}
 
-            <ResumeJourney
-              key={identity.kind === "user" ? `user:${identity.user.uid}` : "guest"}
-              identity={identity}
-            />
+              <ResumeJourney
+                key={identityKey}
+                identity={identity}
+                onProfileChange={handleProfileChange}
+              />
 
             <p className="privacy-note">
               <svg viewBox="0 0 20 20" aria-hidden="true">
@@ -494,7 +558,23 @@ export function ResumeMatchApp() {
               Extracted text is sent to Gemini only when you continue from job
               preferences.
             </p>
-          </>
+            </>
+          )}
+        </div>
+
+        {identity && activeView === "account" && (
+          <Account
+            key={identityKey}
+            identity={identity}
+            profile={currentProfile}
+            firebaseAvailable={firebaseAvailable}
+            authBusy={authBusy}
+            authMessage={authMessage}
+            onBack={showMatchView}
+            onGoogleSignIn={() => void googleSignIn()}
+            onSignOut={() => void googleSignOut()}
+            onLeaveGuestMode={leaveGuestMode}
+          />
         )}
       </div>
     </main>

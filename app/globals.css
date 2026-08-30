@@ -58,6 +58,31 @@ button {
   justify-content: space-between;
 }
 
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-account-button {
+  min-height: 36px;
+  padding: 0 14px;
+  cursor: pointer;
+  border: 1px solid #d8def5;
+  border-radius: 10px;
+  color: var(--brand);
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  font-weight: 750;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.nav-account-button:hover,
+.nav-account-button[aria-current="page"] {
+  border-color: #bcc8ef;
+  background: var(--brand-soft);
+}
+
 .brand {
   display: inline-flex;
   align-items: center;
@@ -323,11 +348,264 @@ button {
   color: var(--muted);
 }
 
+.account-strip-link {
+  flex: 0 0 auto;
+  padding: 6px 7px;
+  cursor: pointer;
+  border: 0;
+  color: var(--brand);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 750;
+}
+
 .account-error {
   margin: -5px 4px 12px;
   color: var(--danger);
   font-size: 12px;
   text-align: right;
+}
+
+.account-page {
+  display: grid;
+  gap: 18px;
+}
+
+.account-back {
+  width: fit-content;
+  padding: 5px 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  border: 0;
+  color: var(--brand);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.account-back span {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.account-page-heading {
+  margin: 4px 0 8px;
+}
+
+.account-page-heading .eyebrow {
+  margin-bottom: 7px;
+}
+
+.account-page-heading h1 {
+  margin: 0;
+  font-size: clamp(34px, 5vw, 46px);
+  letter-spacing: -0.05em;
+  line-height: 1.08;
+}
+
+.account-page-heading > p:last-child {
+  max-width: 610px;
+  margin: 13px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.account-card {
+  border: 1px solid rgba(214, 220, 232, 0.9);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 16px 46px rgba(25, 38, 74, 0.08);
+  padding: 23px;
+}
+
+.account-card h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.account-identity-card {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+
+.account-avatar {
+  width: 68px;
+  height: 68px;
+  flex: 0 0 68px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d8def5;
+  border-radius: 19px;
+  color: var(--brand);
+  background: var(--brand-soft);
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.account-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.account-avatar--guest {
+  color: var(--success);
+  border-color: #c7e9dc;
+  background: var(--success-soft);
+}
+
+.account-identity-copy {
+  min-width: 0;
+}
+
+.account-identity-copy h2 {
+  margin-top: 7px;
+  font-size: 22px;
+}
+
+.account-identity-copy p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.account-status-badge {
+  display: inline-flex;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: var(--success);
+  background: var(--success-soft);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.account-status-badge--guest {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.account-section-heading {
+  margin-bottom: 18px;
+}
+
+.account-facts {
+  margin: 0;
+  display: grid;
+  gap: 13px;
+}
+
+.account-facts div {
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid #e5e8ef;
+  border-radius: 11px;
+  background: #fafbfe;
+}
+
+.account-facts dt {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.account-facts dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.account-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.account-profile-summary {
+  margin: 14px 1px 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.account-storage-note {
+  margin: 15px 0 0;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+  color: #788397;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.account-access-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.account-access-card > div:first-child {
+  max-width: 490px;
+}
+
+.account-access-card p:not(.step-label) {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.account-access-actions {
+  min-width: 190px;
+  display: grid;
+  gap: 9px;
+}
+
+.account-access-actions .secondary-button {
+  min-height: 42px;
+}
+
+.account-exit-button {
+  padding: 5px;
+  cursor: pointer;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.account-configuration-note {
+  max-width: none;
+  margin: -5px 2px 0;
+}
+
+.account-page-error {
+  margin: -6px 2px 0;
+  color: var(--danger);
+  font-size: 12px;
 }
 
 .card-heading,
@@ -687,6 +965,10 @@ button {
 .google-button:focus-visible,
 .primary-button:focus-visible,
 .account-actions button:focus-visible,
+.account-strip-link:focus-visible,
+.nav-account-button:focus-visible,
+.account-back:focus-visible,
+.account-exit-button:focus-visible,
 .field input:focus-visible,
 .card-heading h2:focus-visible,
 .auth-card h2:focus-visible,
@@ -1417,6 +1699,10 @@ input:disabled {
     display: none;
   }
 
+  .nav-actions {
+    gap: 0;
+  }
+
   .page-content {
     margin-top: 38px;
   }
@@ -1458,6 +1744,30 @@ input:disabled {
 
   .account-actions {
     align-self: flex-end;
+  }
+
+  .account-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-access-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .account-access-actions {
+    width: 100%;
+  }
+
+  .account-identity-card {
+    align-items: flex-start;
+  }
+
+  .account-avatar {
+    width: 56px;
+    height: 56px;
+    flex-basis: 56px;
+    border-radius: 16px;
   }
 
   .dropzone {

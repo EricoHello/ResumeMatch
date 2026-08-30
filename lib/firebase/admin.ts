@@ -98,20 +98,6 @@ function getAdminOptions(): AppOptions {
     return { projectId };
   }
 
-  const inlineServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-
-  if (inlineServiceAccount) {
-    const serviceAccount = parseServiceAccount(
-      inlineServiceAccount,
-      "FIREBASE_SERVICE_ACCOUNT_JSON",
-    );
-
-    return {
-      credential: cert(serviceAccount),
-      projectId: serviceAccount.projectId,
-    };
-  }
-
   if (process.env.NODE_ENV !== "production") {
     const serviceAccountFile = process.env.FIREBASE_SERVICE_ACCOUNT_FILE;
 
@@ -134,6 +120,20 @@ function getAdminOptions(): AppOptions {
         projectId: serviceAccount.projectId,
       };
     }
+  }
+
+  const inlineServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+  if (inlineServiceAccount) {
+    const serviceAccount = parseServiceAccount(
+      inlineServiceAccount,
+      "FIREBASE_SERVICE_ACCOUNT_JSON",
+    );
+
+    return {
+      credential: cert(serviceAccount),
+      projectId: serviceAccount.projectId,
+    };
   }
 
   if (process.env.NODE_ENV === "production") {

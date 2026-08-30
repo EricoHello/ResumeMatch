@@ -36,7 +36,9 @@ vi.mock("@/lib/session/guest-session", () => ({
 }));
 
 vi.mock("@/components/resume-uploader", () => ({
-  ResumeUploader: () => <div data-testid="resume-uploader" />,
+  ResumeUploader: () => (
+    <input data-testid="resume-uploader" aria-label="Resume session state" />
+  ),
 }));
 
 vi.mock("@/components/job-preferences", () => ({
@@ -49,7 +51,7 @@ const SIGNED_IN_USER = {
   uid: "firebase-user",
   displayName: "Ada Lovelace",
   email: "ada@example.test",
-  getIdToken: vi.fn(),
+  getIdToken: vi.fn().mockResolvedValue("firebase-token"),
 } as unknown as User;
 
 describe("ResumeMatchApp authentication recovery", () => {
@@ -69,6 +71,7 @@ describe("ResumeMatchApp authentication recovery", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("continues observing Google Sign-In when local persistence is unavailable", async () => {
@@ -108,6 +111,52 @@ describe("ResumeMatchApp authentication recovery", () => {
     expect(authMocks.signInWithPopup).toHaveBeenCalledWith(
       clientMocks.auth,
       clientMocks.googleProvider,
+    );
+  });
+
+  it("opens Account from navigation and returns without remounting the matching flow", async () => {
+    authMocks.setPersistence.mockResolvedValue(undefined);
+    authMocks.onAuthStateChanged.mockImplementation(
+      (_auth: unknown, next: (user: User | null) => void) => {
+        queueMicrotask(() => next(SIGNED_IN_USER));
+        return vi.fn();
+      },
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            data: {
+              preferences: {
+                targetLocation: "Seattle, WA",
+                minimumSalary: 120_000,
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+
+    render(<ResumeMatchApp />);
+
+    const sessionInput = await screen.findByLabelText("Resume session state");
+    fireEvent.change(sessionInput, { target: { value: "keep this session" } });
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+
+    expect(await screen.findByRole("heading", { name: "Account" })).toBeTruthy();
+    expect(screen.getByLabelText("Resume session state")).toHaveProperty(
+      "value",
+      "keep this session",
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Back to resume matching" }),
+    );
+    expect(screen.getByLabelText("Resume session state")).toHaveProperty(
+      "value",
+      "keep this session",
     );
   });
 });

@@ -11,6 +11,7 @@ PDF and DOCX files are parsed into raw text. Signed-in users can load and save j
 ## Included
 
 - Optional Google Sign-In with Firebase Authentication
+- In-app Account view for Firebase identity, saved preferences, session profile status, and guest access
 - Session-only guest mode with no guest Firestore writes
 - Drag-and-drop PDF/DOCX upload with progress and recovery states
 - Server-side PDF extraction with `pdf-parse` and DOCX extraction with `mammoth`
@@ -39,13 +40,13 @@ npm ci
 cp .env.example .env.local
 ```
 
-Set the six `NEXT_PUBLIC_FIREBASE_*` values in `.env.local`. For local Firebase Admin access, set either:
+Set the six `NEXT_PUBLIC_FIREBASE_*` values in `.env.local`. For local Firebase Admin access, the recommended setup is:
 
 ```dotenv
 FIREBASE_SERVICE_ACCOUNT_FILE=/absolute/path/to/firebase-adminsdk.json
 ```
 
-or the full JSON object in `FIREBASE_SERVICE_ACCOUNT_JSON`. Never commit a service-account file or expose its contents through a `NEXT_PUBLIC_*` variable.
+Alternatively, set the full JSON object in `FIREBASE_SERVICE_ACCOUNT_JSON`. It must be a single dotenv value; wrap pretty-printed or multiline JSON in single quotes or Next.js will read only the opening `{` and Firebase Admin authentication will remain unavailable. Never commit a service-account file or expose its contents through a `NEXT_PUBLIC_*` variable.
 
 Set the free Gemini API key as a server-only variable:
 

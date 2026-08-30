@@ -115,6 +115,28 @@ describe("Firebase Admin configuration", () => {
     expect(adminAppMocks.cert).toHaveBeenCalledOnce();
   });
 
+  it("prefers the explicit local file over a malformed inline value", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("FIREBASE_SERVICE_ACCOUNT_JSON", "{");
+    vi.stubEnv(
+      "FIREBASE_SERVICE_ACCOUNT_FILE",
+      "/Users/developer/Downloads/service-account.json",
+    );
+    fileMocks.readFileSync.mockReturnValue(JSON.stringify(SERVICE_ACCOUNT));
+    const { getFirebaseAdminApp } = await import("@/lib/firebase/admin");
+
+    expect(getFirebaseAdminApp()).toBe(adminAppMocks.app);
+    expect(fileMocks.readFileSync).toHaveBeenCalledWith(
+      "/Users/developer/Downloads/service-account.json",
+      "utf8",
+    );
+    expect(adminAppMocks.cert).toHaveBeenCalledWith({
+      projectId: "resumematch-test",
+      clientEmail: "firebase-admin@example.test",
+      privateKey: "line-one\nline-two",
+    });
+  });
+
   it("supports Firebase emulators without loading service-account credentials", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("FIREBASE_AUTH_EMULATOR_HOST", "127.0.0.1:9099");
