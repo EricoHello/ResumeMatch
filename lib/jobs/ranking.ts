@@ -15,6 +15,23 @@ const SEARCH_STOP_WORDS = new Set([
   "to",
 ]);
 
+const GENERIC_ROLE_WORDS = new Set([
+  "associate",
+  "chief",
+  "developer",
+  "director",
+  "engineer",
+  "head",
+  "junior",
+  "lead",
+  "manager",
+  "officer",
+  "principal",
+  "senior",
+  "specialist",
+  "staff",
+]);
+
 function normalizedText(value: string) {
   return value
     .normalize("NFKD")
@@ -31,11 +48,14 @@ function tokens(value: string) {
   );
 }
 
-function overlapRatio(left: Set<string>, right: Set<string>) {
-  if (left.size === 0) return 0;
+function overlapCount(left: Set<string>, right: Set<string>) {
   let matches = 0;
   for (const token of left) if (right.has(token)) matches += 1;
-  return matches / left.size;
+  return matches;
+}
+
+function overlapRatio(left: Set<string>, right: Set<string>) {
+  return left.size === 0 ? 0 : overlapCount(left, right) / left.size;
 }
 
 function annualSalary(candidate: JobCandidate) {
@@ -76,39 +96,81 @@ function recencyScore(postedTimestamp: number | null, now: number) {
   return 0;
 }
 
+function signalMatches(
+  values: string[],
+  searchableTokens: Set<string>,
+  text: string,
+) {
+  return values.filter((value, index, all) => {
+    const normalized = normalizedText(value);
+    if (
+      normalized.length < 2 ||
+      all.findIndex((item) => normalizedText(item) === normalized) !== index
+    ) {
+      return false;
+    }
+
+    if (text.includes(normalized)) return true;
+    const valueTokens = tokens(value);
+    return (
+      valueTokens.size > 1 &&
+      overlapRatio(valueTokens, searchableTokens) >= 0.6
+    );
+  });
+}
+
+function roleRelationship(role: string, title: string) {
+  const normalizedRole = normalizedText(role);
+  const normalizedTitle = normalizedText(title);
+  const roleTokens = tokens(role);
+  const titleTokens = tokens(title);
+  const overlap = overlapRatio(roleTokens, titleTokens);
+  const distinctiveRoleTokens = new Set(
+    [...roleTokens].filter((token) => !GENERIC_ROLE_WORDS.has(token)),
+  );
+  const distinctiveOverlap = overlapCount(distinctiveRoleTokens, titleTokens);
+
+  return {
+    exact: normalizedRole === normalizedTitle,
+    phrase:
+      normalizedTitle.includes(normalizedRole) ||
+      normalizedRole.includes(normalizedTitle),
+    overlap,
+    reasonablyRelated:
+      normalizedRole === normalizedTitle ||
+      normalizedTitle.includes(normalizedRole) ||
+      normalizedRole.includes(normalizedTitle) ||
+      distinctiveOverlap > 0 ||
+      overlap >= 0.66,
+  };
+}
+
 function scoreCandidate(
   candidate: JobCandidate,
   profile: ResumeProfile,
   now: number,
 ) {
-  const title = normalizedText(candidate.title);
-  const titleTokens = tokens(candidate.title);
   const searchableText = normalizedText(
     `${candidate.title} ${candidate.description}`,
   );
-  let score = 0;
+  const searchableTokens = tokens(searchableText);
 
-  for (const [index, role] of profile.targetRoles.entries()) {
-    const normalizedRole = normalizedText(role);
-    const roleOverlap = overlapRatio(tokens(role), titleTokens);
-    if (title === normalizedRole) score += 95 - index * 3;
-    else if (title.includes(normalizedRole) || normalizedRole.includes(title)) {
-      score += 72 - index * 3;
-    } else {
-      score += roleOverlap * (52 - index * 2);
-    }
-  }
+  const roleRelationships = profile.targetRoles.map((role, index) => {
+    const relationship = roleRelationship(role, candidate.title);
+    const score = relationship.exact
+      ? 95 - index * 3
+      : relationship.phrase
+        ? 72 - index * 3
+        : relationship.overlap * (52 - index * 2);
+    return { ...relationship, score };
+  });
+  let score = Math.max(0, ...roleRelationships.map((item) => item.score));
 
-  const matchedSkills = [...profile.skills, ...profile.searchKeywords]
-    .filter((value, index, all) => {
-      const normalized = normalizedText(value);
-      return (
-        normalized.length > 1 &&
-        searchableText.includes(normalized) &&
-        all.findIndex((item) => normalizedText(item) === normalized) === index
-      );
-    })
-    .slice(0, 4);
+  const matchedSkills = signalMatches(
+    [...profile.skills, ...profile.searchKeywords],
+    searchableTokens,
+    searchableText,
+  ).slice(0, 4);
   score += Math.min(24, matchedSkills.length * 6);
 
   const desiredLocation = normalizedText(profile.preferences.targetLocation);
@@ -117,17 +179,19 @@ function scoreCandidate(
   if (wantsRemote && candidate.isRemote) score += 34;
   else if (actualLocation.includes(desiredLocation)) score += 32;
   else {
-    score += overlapRatio(tokens(profile.preferences.targetLocation), tokens(candidate.location)) * 24;
+    score +=
+      overlapRatio(
+        tokens(profile.preferences.targetLocation),
+        tokens(candidate.location),
+      ) * 24;
     if (candidate.isRemote) score += 8;
   }
 
   const salary = annualSalary(candidate);
   const minimumDesired = profile.preferences.minimumSalary;
-  if (
-    salary.maximum !== null &&
-    salary.maximum < minimumDesired
-  ) {
-    score -= 35;
+  if (salary.maximum !== null && salary.maximum < minimumDesired) {
+    // Known below-preference pay is a modest ranking penalty, never a filter.
+    score -= 18;
   } else if (
     (salary.minimum !== null && salary.minimum >= minimumDesired) ||
     (salary.maximum !== null && salary.maximum >= minimumDesired)
@@ -138,7 +202,78 @@ function scoreCandidate(
   score += recencyScore(candidate.postedTimestamp, now);
   if (candidate.applyUrl) score += 2;
 
-  return { score, matchedSkills };
+  const recentTitleRelationship = profile.recentJobTitles.some(
+    (title) => roleRelationship(title, candidate.title).reasonablyRelated,
+  );
+  const reasonablyRelated =
+    roleRelationships.some((item) => item.reasonablyRelated) ||
+    recentTitleRelationship ||
+    matchedSkills.length > 0;
+
+  return { score, matchedSkills, reasonablyRelated };
+}
+
+function toJobMatch(candidate: JobCandidate, matchedSkills: string[]): JobMatch {
+  return {
+    id: candidate.id,
+    title: candidate.title,
+    company: candidate.company,
+    location: candidate.location,
+    salary: candidate.salary,
+    applyUrl: candidate.applyUrl,
+    postedAt: candidate.postedAt,
+    employmentType: candidate.employmentType,
+    isRemote: candidate.isRemote,
+    matchedSkills,
+  };
+}
+
+export type RankedJobSummary = {
+  title: string;
+  score: number;
+};
+
+export type JobRankingResult = {
+  jobs: JobMatch[];
+  remainingAfterFiltering: number;
+  topRanked: RankedJobSummary[];
+};
+
+export function rankJobCandidatesWithDiagnostics(
+  candidates: JobCandidate[],
+  profile: ResumeProfile,
+  now = Date.now(),
+): JobRankingResult {
+  const seen = new Set<string>();
+  const ranked = candidates
+    .map((candidate, index) => ({
+      candidate,
+      index,
+      ...scoreCandidate(candidate, profile, now),
+    }))
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .filter(({ candidate, reasonablyRelated }) => {
+      if (!reasonablyRelated) return false;
+      const key = normalizedText(
+        `${candidate.title}|${candidate.company}|${candidate.location}`,
+      );
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  return {
+    jobs: ranked
+      .slice(0, 3)
+      .map(({ candidate, matchedSkills }) =>
+        toJobMatch(candidate, matchedSkills),
+      ),
+    remainingAfterFiltering: ranked.length,
+    topRanked: ranked.slice(0, 5).map(({ candidate, score }) => ({
+      title: candidate.title,
+      score: Math.round(score * 10) / 10,
+    })),
+  };
 }
 
 export function rankJobCandidates(
@@ -146,34 +281,5 @@ export function rankJobCandidates(
   profile: ResumeProfile,
   now = Date.now(),
 ): JobMatch[] {
-  const seen = new Set<string>();
-
-  return candidates
-    .map((candidate, index) => ({
-      candidate,
-      index,
-      ...scoreCandidate(candidate, profile, now),
-    }))
-    .sort((left, right) => right.score - left.score || left.index - right.index)
-    .filter(({ candidate }) => {
-      const key = normalizedText(
-        `${candidate.title}|${candidate.company}|${candidate.location}`,
-      );
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(0, 3)
-    .map(({ candidate, matchedSkills }) => ({
-      id: candidate.id,
-      title: candidate.title,
-      company: candidate.company,
-      location: candidate.location,
-      salary: candidate.salary,
-      applyUrl: candidate.applyUrl,
-      postedAt: candidate.postedAt,
-      employmentType: candidate.employmentType,
-      isRemote: candidate.isRemote,
-      matchedSkills,
-    }));
+  return rankJobCandidatesWithDiagnostics(candidates, profile, now).jobs;
 }

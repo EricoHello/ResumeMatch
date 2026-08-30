@@ -127,4 +127,15 @@ describe("JobSearch", () => {
     );
     expect(screen.getByRole("button", { name: "Try job search again" })).toBeTruthy();
   });
+
+  it("uses the relevant-jobs empty state only for an empty ranked response", async () => {
+    clientMocks.searchJobs.mockResolvedValue([]);
+    render(<JobSearch profile={PROFILE} />);
+    fireEvent.click(screen.getByRole("button", { name: "Find 3 job matches" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "No relevant jobs found" }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/no strong matches/i)).toBeNull();
+  });
 });

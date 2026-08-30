@@ -170,7 +170,7 @@ export function JobSearch({ profile }: { profile: ResumeProfile }) {
         : state.status === "error"
           ? "Couldn’t finish the job search"
           : state.jobs.length === 0
-            ? "No strong matches found this time"
+            ? "No relevant jobs found"
             : `${state.jobs.length} relevant ${state.jobs.length === 1 ? "job" : "jobs"} found`;
 
   return (
@@ -262,7 +262,7 @@ export function JobSearch({ profile }: { profile: ResumeProfile }) {
           ) : (
             <div className="job-search-empty" role="status">
               <p>
-                JSearch did not return a usable current opening for this profile and location.
+                JSearch did not return a reasonably related opening with a usable apply link.
               </p>
             </div>
           )}

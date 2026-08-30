@@ -1,11 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
 import type { ResumeProfile } from "@/lib/analysis/types";
 import {
+  buildJSearchQuery,
   JSearchClient,
   JSearchConfigurationError,
+  jSearchLocaleFor,
   parseJSearchResponse,
 } from "@/lib/jobs/jsearch";
 
@@ -41,8 +43,12 @@ function providerJob(id: string) {
 
 describe("JSearchClient", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
+  let logInfo: Mock<(message: string, data: unknown) => void>;
+  let logger: { info: (message: string, data: unknown) => void };
 
   beforeEach(() => {
+    logInfo = vi.fn();
+    logger = { info: (message, data) => logInfo(message, data) };
     fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({ data: { jobs: [providerJob("1"), providerJob("2")] } }),
@@ -52,7 +58,11 @@ describe("JSearchClient", () => {
   });
 
   it("uses one combined JSearch request and ranks locally", async () => {
-    const client = new JSearchClient("server-secret", fetchMock as typeof fetch);
+    const client = new JSearchClient(
+      "server-secret",
+      fetchMock as typeof fetch,
+      logger,
+    );
     const jobs = await client.search(PROFILE, new AbortController().signal);
 
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -61,19 +71,39 @@ describe("JSearchClient", () => {
       "https://api.openwebninja.com/jsearch/search-v2",
     );
     expect(input.searchParams.get("query")).toContain("Staff Software Engineer");
+    expect(input.searchParams.get("query")).toContain("distributed systems");
     expect(input.searchParams.get("query")).toContain("Seattle, WA");
     expect(input.searchParams.get("cursor")).toBeNull();
     expect(input.searchParams.get("num_pages")).toBeNull();
     expect(input.searchParams.get("fields")).toBeNull();
-    expect(input.searchParams.get("date_posted")).toBe("month");
+    expect(input.searchParams.get("date_posted")).toBeNull();
+    expect(input.searchParams.get("work_from_home")).toBeNull();
     expect(init.headers).toEqual({ "x-api-key": "server-secret" });
     expect(jobs).toHaveLength(2);
     expect(jobs[0]).not.toHaveProperty("description");
     expect(JSON.stringify(jobs)).not.toContain("server-secret");
+    expect(logInfo).toHaveBeenCalledWith(
+      "[ResumeMatch job search] generated JSearch query",
+      expect.stringContaining("Staff Software Engineer"),
+    );
+    expect(logInfo).toHaveBeenCalledWith(
+      "[ResumeMatch job search] number of raw jobs returned",
+      2,
+    );
+    expect(logInfo).toHaveBeenCalledWith(
+      "[ResumeMatch job search] number remaining after filtering",
+      2,
+    );
+    expect(logInfo).toHaveBeenCalledWith(
+      "[ResumeMatch job search] top ranked scores/titles",
+      expect.arrayContaining([
+        expect.objectContaining({ title: "Staff Software Engineer" }),
+      ]),
+    );
   });
 
   it("does not call the provider without a configured key", async () => {
-    const client = new JSearchClient(undefined, fetchMock as typeof fetch);
+    const client = new JSearchClient(undefined, fetchMock as typeof fetch, logger);
     await expect(
       client.search(PROFILE, new AbortController().signal),
     ).rejects.toBeInstanceOf(JSearchConfigurationError);
@@ -82,7 +112,11 @@ describe("JSearchClient", () => {
 
   it("does not retry a provider failure", async () => {
     fetchMock.mockResolvedValueOnce(new Response("quota", { status: 429 }));
-    const client = new JSearchClient("server-secret", fetchMock as typeof fetch);
+    const client = new JSearchClient(
+      "server-secret",
+      fetchMock as typeof fetch,
+      logger,
+    );
     await expect(
       client.search(PROFILE, new AbortController().signal),
     ).rejects.toMatchObject({ status: 429 });
@@ -100,5 +134,99 @@ describe("parseJSearchResponse", () => {
         ],
       }),
     ).toHaveLength(1);
+  });
+
+  it("keeps jobs with null primary fields when safe fallbacks are available", () => {
+    const [job] = parseJSearchResponse({
+      data: [
+        {
+          ...providerJob("fallback"),
+          job_apply_link: null,
+          job_google_link: null,
+          apply_options: [
+            {
+              apply_link: "https://employer.example.test/apply/fallback",
+              is_direct: true,
+            },
+          ],
+          job_location: null,
+          job_city: "Seattle",
+          job_state: "WA",
+          job_country: "US",
+          job_min_salary: "150000",
+          job_max_salary: "180000",
+          job_employment_type: null,
+          job_employment_types: ["FULLTIME"],
+          job_is_remote: null,
+          work_arrangement: "remote",
+        },
+      ],
+    });
+
+    expect(job).toMatchObject({
+      applyUrl: "https://employer.example.test/apply/fallback",
+      location: "Seattle, WA, US",
+      minimumSalary: 150000,
+      maximumSalary: 180000,
+      employmentType: "FULLTIME",
+      isRemote: true,
+    });
+  });
+});
+
+describe("broad query construction", () => {
+  it.each([
+    {
+      label: "software profile in a US city",
+      profile: PROFILE,
+      expected: "Staff Software Engineer distributed systems jobs in Seattle, WA",
+      locale: { country: "us", language: "en" },
+    },
+    {
+      label: "specialized remote marketing profile",
+      profile: {
+        ...PROFILE,
+        targetRoles: [
+          "Senior Product Marketing Manager, B2B SaaS Growth",
+          "Product Marketing Manager",
+        ],
+        searchKeywords: ["go-to-market strategy", "product launches", "SaaS"],
+        preferences: { targetLocation: "Remote", minimumSalary: 150_000 },
+      },
+      expected: "Senior Product Marketing Manager go-to-market strategy jobs remote",
+      locale: { country: "us", language: "en" },
+    },
+    {
+      label: "finance profile in the United Kingdom",
+      profile: {
+        ...PROFILE,
+        targetRoles: ["Senior Financial Analyst"],
+        searchKeywords: ["financial planning", "forecasting"],
+        preferences: { targetLocation: "London, United Kingdom", minimumSalary: 90_000 },
+      },
+      expected: "Senior Financial Analyst financial planning jobs in London, United Kingdom",
+      locale: { country: "gb", language: "en" },
+    },
+  ])("builds one compact query for $label", ({ profile, expected, locale }) => {
+    expect(buildJSearchQuery(profile as ResumeProfile)).toBe(expected);
+    expect(jSearchLocaleFor(profile.preferences.targetLocation)).toEqual(locale);
+  });
+
+  it("never adds every target role or the full skill list", () => {
+    const query = buildJSearchQuery({
+      ...PROFILE,
+      skills: ["TypeScript", "Kubernetes", "AWS", "React", "Node.js"],
+      targetRoles: [
+        "Staff Software Engineer",
+        "Platform Engineer",
+        "Backend Engineer",
+      ],
+      searchKeywords: ["distributed systems", "cloud infrastructure", "APIs"],
+    });
+
+    expect(query).not.toContain("Platform Engineer");
+    expect(query).not.toContain("Backend Engineer");
+    expect(query).not.toContain("Kubernetes");
+    expect(query).not.toContain("cloud infrastructure");
   });
 });

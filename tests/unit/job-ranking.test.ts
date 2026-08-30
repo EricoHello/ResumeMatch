@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { ResumeProfile } from "@/lib/analysis/types";
-import { rankJobCandidates } from "@/lib/jobs/ranking";
+import {
+  rankJobCandidates,
+  rankJobCandidatesWithDiagnostics,
+} from "@/lib/jobs/ranking";
 import type { JobCandidate } from "@/lib/jobs/types";
 
 const PROFILE: ResumeProfile = {
@@ -114,6 +117,55 @@ describe("rankJobCandidates", () => {
     expect(matches.map((job) => job.id)).toEqual([
       "qualified-hourly",
       "low-hourly",
+    ]);
+  });
+
+  it("returns a reasonably related imperfect job without a score threshold", () => {
+    const productProfile: ResumeProfile = {
+      ...PROFILE,
+      skills: ["Roadmaps", "Agile"],
+      recentJobTitles: ["Product Manager"],
+      targetRoles: ["Senior Product Manager"],
+      searchKeywords: ["product strategy"],
+      preferences: { targetLocation: "Remote", minimumSalary: 180_000 },
+    };
+    const imperfect = candidate("imperfect", {
+      title: "Product Owner",
+      company: "Different Industry",
+      location: "Chicago, IL",
+      salary: "$90,000 / year",
+      minimumSalary: 90_000,
+      maximumSalary: 90_000,
+      description: "Own a product backlog and coordinate delivery.",
+      postedAt: "2 months ago",
+      postedTimestamp: now / 1_000 - 60 * 86_400,
+    });
+
+    expect(rankJobCandidates([imperfect], productProfile, now)).toEqual([
+      expect.objectContaining({ id: "imperfect", title: "Product Owner" }),
+    ]);
+  });
+
+  it("filters only clearly unrelated openings and reports ranking diagnostics", () => {
+    const result = rankJobCandidatesWithDiagnostics(
+      [
+        candidate("relevant"),
+        candidate("unrelated", {
+          title: "Dental Hygienist",
+          description: "Patient dental care and x-rays.",
+          location: "Boise, ID",
+          minimumSalary: null,
+          maximumSalary: null,
+        }),
+      ],
+      PROFILE,
+      now,
+    );
+
+    expect(result.jobs).toHaveLength(1);
+    expect(result.remainingAfterFiltering).toBe(1);
+    expect(result.topRanked).toEqual([
+      expect.objectContaining({ title: "Staff Software Engineer" }),
     ]);
   });
 });

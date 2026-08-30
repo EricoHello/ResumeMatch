@@ -75,7 +75,7 @@ export const RESUME_ANALYSIS_RESPONSE_SCHEMA = {
       minItems: 1,
       maxItems: MAX_TARGET_ROLES,
       description:
-        "Plausible target role titles supported by the resume and preferences.",
+        "Plausible target role titles supported by the resume and preferences, ordered with the strongest primary target role first.",
       items: { type: "string" },
     },
     searchKeywords: {
@@ -83,7 +83,7 @@ export const RESUME_ANALYSIS_RESPONSE_SCHEMA = {
       minItems: 1,
       maxItems: MAX_SEARCH_KEYWORDS,
       description:
-        "Concise job-search keywords grounded in the resume and preferences; do not include boolean query syntax.",
+        "Concise job-search keywords grounded in the resume and preferences, strongest and most useful first; do not include boolean query syntax.",
       items: { type: "string" },
     },
   },

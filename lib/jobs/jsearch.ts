@@ -2,11 +2,15 @@ import "server-only";
 
 import type { ResumeProfile } from "@/lib/analysis/types";
 
-import { rankJobCandidates } from "./ranking";
+import { rankJobCandidatesWithDiagnostics } from "./ranking";
 import type { JobCandidate, JobMatch } from "./types";
 
 const JSEARCH_ENDPOINT = "https://api.openwebninja.com/jsearch/search-v2";
 const SEARCH_TIMEOUT_MS = 30_000;
+
+type JobSearchLogger = {
+  info: (message: string, data: unknown) => void;
+};
 
 export class JSearchConfigurationError extends Error {}
 
@@ -33,9 +37,13 @@ function textValue(value: unknown, maximumLength: number) {
 }
 
 function numberValue(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : null;
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim() !== ""
+        ? Number(value)
+        : Number.NaN;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function safeUrl(value: unknown) {
@@ -49,6 +57,17 @@ function safeUrl(value: unknown) {
   } catch {
     return null;
   }
+}
+
+function applyOptionUrl(value: unknown) {
+  if (!Array.isArray(value)) return null;
+  const options = value.filter(isRecord);
+  const direct = options.find((option) => option.is_direct === true);
+  return (
+    safeUrl(direct?.apply_link) ??
+    options.map((option) => safeUrl(option.apply_link)).find(Boolean) ??
+    null
+  );
 }
 
 function formattedNumber(value: number, currency: string | null) {
@@ -86,13 +105,18 @@ function parseCandidate(value: unknown, index: number): JobCandidate | null {
   if (!isRecord(value)) return null;
 
   const title = textValue(value.job_title, 240);
-  const applyUrl = safeUrl(value.job_apply_link) ?? safeUrl(value.job_google_link);
+  const applyUrl =
+    safeUrl(value.job_apply_link) ??
+    applyOptionUrl(value.apply_options) ??
+    safeUrl(value.job_google_link);
   if (!title || !applyUrl) return null;
 
   const city = textValue(value.job_city, 120);
   const state = textValue(value.job_state, 120);
   const country = textValue(value.job_country, 120);
-  const isRemote = value.job_is_remote === true;
+  const isRemote =
+    value.job_is_remote === true ||
+    /\bremote\b/i.test(textValue(value.work_arrangement, 80) ?? "");
   const composedLocation = [city, state, country].filter(Boolean).join(", ");
 
   return {
@@ -105,7 +129,11 @@ function parseCandidate(value: unknown, index: number): JobCandidate | null {
     salary: salaryDisplay(value),
     applyUrl,
     postedAt: textValue(value.job_posted_at, 120),
-    employmentType: textValue(value.job_employment_type, 80),
+    employmentType:
+      textValue(value.job_employment_type, 80) ??
+      (Array.isArray(value.job_employment_types)
+        ? textValue(value.job_employment_types[0], 80)
+        : null),
     isRemote,
     matchedSkills: [],
     description: textValue(value.job_description, 12_000) ?? "",
@@ -116,7 +144,7 @@ function parseCandidate(value: unknown, index: number): JobCandidate | null {
   };
 }
 
-export function parseJSearchResponse(value: unknown): JobCandidate[] {
+export function parseJSearchResponseWithDiagnostics(value: unknown) {
   if (!isRecord(value)) throw new JSearchResponseError("Invalid JSearch response.");
 
   const data = value.data;
@@ -127,17 +155,79 @@ export function parseJSearchResponse(value: unknown): JobCandidate[] {
       : null;
 
   if (!jobs) throw new JSearchResponseError("Invalid JSearch response.");
-  return jobs
+  const candidates = jobs
     .map((job, index) => parseCandidate(job, index))
     .filter((job): job is JobCandidate => job !== null);
+  return { rawJobCount: jobs.length, candidates };
+}
+
+export function parseJSearchResponse(value: unknown): JobCandidate[] {
+  return parseJSearchResponseWithDiagnostics(value).candidates;
+}
+
+function cleanQueryPart(value: string, maximumLength: number) {
+  return value
+    .normalize("NFKC")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/["()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maximumLength)
+    .trim();
+}
+
+function broadPrimaryRole(value: string) {
+  const cleaned = cleanQueryPart(value, 100)
+    .replace(/\s+(?:\/|\||or)\s+.*$/i, "")
+    .replace(/\s+[–—:-]\s+.*$/, "")
+    .trim();
+  const commaIndex = cleaned.indexOf(",");
+  if (commaIndex > 0) {
+    const beforeComma = cleaned.slice(0, commaIndex).trim();
+    if (beforeComma.split(/\s+/).length >= 2) return beforeComma;
+  }
+  return cleaned.replaceAll(",", " ").replace(/\s+/g, " ").trim();
+}
+
+function strongestSearchKeyword(profile: ResumeProfile, role: string) {
+  const roleWords = new Set(role.toLowerCase().split(/\s+/));
+  for (const keyword of profile.searchKeywords) {
+    const cleaned = cleanQueryPart(keyword, 60)
+      .replace(/\b(?:AND|OR|NOT)\b/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!cleaned) continue;
+    const words = cleaned.toLowerCase().split(/\s+/).slice(0, 4);
+    if (words.every((word) => roleWords.has(word))) continue;
+    return words.join(" ");
+  }
+  return "";
+}
+
+export function jSearchLocaleFor(location: string) {
+  const normalized = location.toLowerCase();
+  const rules: Array<[RegExp, string, string]> = [
+    [/\b(?:united kingdom|england|scotland|wales|london|uk)\b/, "gb", "en"],
+    [/\b(?:canada|toronto|vancouver|montreal)\b/, "ca", "en"],
+    [/\b(?:australia|sydney|melbourne)\b/, "au", "en"],
+    [/\b(?:germany|berlin|munich)\b/, "de", "de"],
+    [/\b(?:france|paris)\b/, "fr", "fr"],
+    [/\b(?:spain|madrid|barcelona)\b/, "es", "es"],
+  ];
+  const match = rules.find(([pattern]) => pattern.test(normalized));
+  return match ? { country: match[1], language: match[2] } : { country: "us", language: "en" };
 }
 
 export function buildJSearchQuery(profile: ResumeProfile) {
+  const role = broadPrimaryRole(profile.targetRoles[0]);
+  const keyword = strongestSearchKeyword(profile, role);
+  const location = cleanQueryPart(profile.preferences.targetLocation, 120);
   const remote = /\bremote\b/i.test(profile.preferences.targetLocation);
   return [
-    profile.targetRoles[0],
+    role,
+    keyword,
     "jobs",
-    remote ? "remote" : `in ${profile.preferences.targetLocation}`,
+    remote ? "remote" : `in ${location}`,
   ]
     .filter(Boolean)
     .join(" ");
@@ -147,21 +237,30 @@ export class JSearchClient {
   constructor(
     private readonly apiKey = process.env.OPENWEBNINJA_API_KEY?.trim(),
     private readonly fetchImplementation: typeof fetch = fetch,
+    private readonly logger: JobSearchLogger = console,
   ) {}
+
+  private debug(message: string, data: unknown) {
+    if (
+      process.env.NODE_ENV !== "production" ||
+      process.env.JOB_SEARCH_DEBUG === "true"
+    ) {
+      this.logger.info(`[ResumeMatch job search] ${message}`, data);
+    }
+  }
 
   async search(profile: ResumeProfile, signal: AbortSignal): Promise<JobMatch[]> {
     if (!this.apiKey) {
       throw new JSearchConfigurationError("OPENWEBNINJA_API_KEY is not configured.");
     }
 
+    const query = buildJSearchQuery(profile);
+    const locale = jSearchLocaleFor(profile.preferences.targetLocation);
     const url = new URL(JSEARCH_ENDPOINT);
-    url.searchParams.set("query", buildJSearchQuery(profile));
-    url.searchParams.set("country", "us");
-    url.searchParams.set("language", "en");
-    url.searchParams.set("date_posted", "month");
-    if (/\bremote\b/i.test(profile.preferences.targetLocation)) {
-      url.searchParams.set("work_from_home", "true");
-    }
+    url.searchParams.set("query", query);
+    url.searchParams.set("country", locale.country);
+    url.searchParams.set("language", locale.language);
+    this.debug("generated JSearch query", query);
 
     let response: Response;
     try {
@@ -186,7 +285,14 @@ export class JSearchClient {
       throw new JSearchResponseError("JSearch returned invalid JSON.");
     }
 
-    return rankJobCandidates(parseJSearchResponse(body), profile);
+    const parsed = parseJSearchResponseWithDiagnostics(body);
+    this.debug("number of raw jobs returned", parsed.rawJobCount);
+    this.debug("number usable after field normalization", parsed.candidates.length);
+
+    const ranked = rankJobCandidatesWithDiagnostics(parsed.candidates, profile);
+    this.debug("number remaining after filtering", ranked.remainingAfterFiltering);
+    this.debug("top ranked scores/titles", ranked.topRanked);
+    return ranked.jobs;
   }
 }
 
