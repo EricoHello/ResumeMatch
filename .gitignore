@@ -14,6 +14,10 @@
 .env*
 !.env.example
 
+# Firebase Admin credentials (never commit)
+*-firebase-adminsdk-*.json
+/.firebase/
+
 # logs and editor files
 *.log
 .DS_Store

@@ -1,0 +1,78 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function ownsUserData(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function hasExactJobPreferenceFields(data) {
+      return data.keys().hasOnly([
+        'schemaVersion',
+        'targetLocation',
+        'minimumSalary',
+        'salaryCurrency',
+        'salaryPeriod',
+        'createdAt',
+        'updatedAt'
+      ]) && data.keys().hasAll([
+        'schemaVersion',
+        'targetLocation',
+        'minimumSalary',
+        'salaryCurrency',
+        'salaryPeriod',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
+
+    function hasValidJobPreferenceValues(data) {
+      return data.schemaVersion is int
+        && data.schemaVersion == 1
+        && data.targetLocation is string
+        && data.targetLocation.size() >= 1
+        && data.targetLocation.size() <= 120
+        && data.minimumSalary is int
+        && data.minimumSalary >= 0
+        && data.minimumSalary <= 10000000
+        && data.salaryCurrency is string
+        && data.salaryCurrency == 'USD'
+        && data.salaryPeriod is string
+        && data.salaryPeriod == 'year'
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.createdAt <= data.updatedAt;
+    }
+
+    function isValidJobPreference(data) {
+      return hasExactJobPreferenceFields(data)
+        && hasValidJobPreferenceValues(data);
+    }
+
+    match /users/{uid}/preferences/job {
+      allow get: if ownsUserData(uid);
+
+      allow create: if ownsUserData(uid)
+        && isValidJobPreference(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if ownsUserData(uid)
+        && isValidJobPreference(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedAt >= resource.data.updatedAt;
+
+      allow list, delete: if false;
+    }
+
+    // Reserved for a later AI-analysis iteration. No client may access it yet.
+    match /users/{uid}/resumeProfiles/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

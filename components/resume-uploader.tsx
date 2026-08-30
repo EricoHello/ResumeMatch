@@ -5,6 +5,7 @@ import {
   FileRejection,
   useDropzone,
 } from "react-dropzone";
+import type { ParsedResume } from "@/lib/resume/types";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -17,13 +18,7 @@ const ACCEPTED_FILES = {
 
 type Phase = "idle" | "uploading" | "parsing" | "success" | "error";
 
-type ParseResult = {
-  fileName: string;
-  fileType: "pdf" | "docx";
-  text: string;
-  characterCount: number;
-  warnings?: string[];
-};
+export type ResumeParseResult = ParsedResume;
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -67,7 +62,7 @@ function responseError(responseText: string) {
   return "We couldn’t extract text from this resume. Please try again.";
 }
 
-function parseResponse(responseText: string): ParseResult | null {
+function parseResponse(responseText: string): ResumeParseResult | null {
   try {
     const body: unknown = JSON.parse(responseText);
 
@@ -126,11 +121,15 @@ function FileIcon() {
   );
 }
 
-export function ResumeUploader() {
+type ResumeUploaderProps = {
+  onResultChange?: (result: ResumeParseResult | null) => void;
+};
+
+export function ResumeUploader({ onResultChange }: ResumeUploaderProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [result, setResult] = useState<ParseResult | null>(null);
+  const [result, setResult] = useState<ResumeParseResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">(
     "idle",
@@ -145,6 +144,7 @@ export function ResumeUploader() {
 
     setSelectedFile(file);
     setResult(null);
+    onResultChange?.(null);
     setError(null);
     setCopyState("idle");
     setUploadProgress(0);
@@ -197,6 +197,7 @@ export function ResumeUploader() {
 
       requestRef.current = null;
       setResult(parsed);
+      onResultChange?.(parsed);
       setPhase("success");
     });
 
@@ -209,13 +210,14 @@ export function ResumeUploader() {
     });
 
     request.send(formData);
-  }, []);
+  }, [onResultChange]);
 
   const onDrop = useCallback(
     (acceptedFiles: File[], fileRejections: FileRejection[]) => {
       if (fileRejections.length > 0) {
         setSelectedFile(null);
         setResult(null);
+        onResultChange?.(null);
         setError(rejectionMessage(fileRejections));
         setPhase("error");
         return;
@@ -224,7 +226,7 @@ export function ResumeUploader() {
       const file = acceptedFiles[0];
       if (file) upload(file);
     },
-    [upload],
+    [onResultChange, upload],
   );
 
   const isBusy = phase === "uploading" || phase === "parsing";
@@ -252,9 +254,10 @@ export function ResumeUploader() {
     setUploadProgress(0);
     setSelectedFile(null);
     setResult(null);
+    onResultChange?.(null);
     setError(null);
     setCopyState("idle");
-  }, []);
+  }, [onResultChange]);
 
   useEffect(() => {
     return () => {
@@ -303,8 +306,8 @@ export function ResumeUploader() {
     <section className="uploader-card" aria-labelledby="uploader-heading">
       <div className="card-heading">
         <div>
-          <p className="step-label">Step 1 of 1</p>
-          <h2 id="uploader-heading">Upload your resume</h2>
+          <p className="step-label">Step 1 of 2</p>
+          <h2 id="uploader-heading" tabIndex={-1}>Upload your resume</h2>
         </div>
         <span className="format-badge">PDF · DOCX</span>
       </div>

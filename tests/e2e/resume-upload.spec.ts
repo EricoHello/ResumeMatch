@@ -12,6 +12,7 @@ import {
 
 async function openUploader(page: Page) {
   await page.goto("/");
+  await page.getByRole("button", { name: /continue as guest/i }).click();
   await expect(
     page.getByRole("button", { name: /choose or drop a resume file/i }),
   ).toBeVisible();

@@ -1,0 +1,378 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  browserLocalPersistence,
+  onAuthStateChanged,
+  setPersistence,
+  signInWithPopup,
+  signOut,
+  type User,
+} from "firebase/auth";
+import {
+  JobPreferences,
+  type PreferenceIdentity,
+} from "@/components/job-preferences";
+import {
+  ResumeUploader,
+  type ResumeParseResult,
+} from "@/components/resume-uploader";
+import type { ResumeAnalysisInput } from "@/lib/analysis/types";
+import {
+  getFirebaseClient,
+  isFirebaseClientConfigured,
+} from "@/lib/firebase/client";
+import type { JobPreferences as JobPreferencesValue } from "@/lib/preferences/types";
+import {
+  beginGuestSession,
+  clearGuestSession,
+  readGuestSession,
+} from "@/lib/session/guest-session";
+
+type AuthState =
+  | { status: "loading" }
+  | { status: "choice" }
+  | { status: "guest" }
+  | { status: "user"; user: User };
+
+function readableAuthError(error: unknown) {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    if (error.code === "auth/popup-closed-by-user") {
+      return "Google Sign-In was closed before it finished.";
+    }
+    if (error.code === "auth/popup-blocked") {
+      return "Your browser blocked the Google Sign-In window. Allow pop-ups and try again.";
+    }
+  }
+
+  return "We couldn’t sign you in with Google. Please try again or continue as a guest.";
+}
+
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.87h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.35Z" />
+      <path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.62-2.42l-3.24-2.51c-.9.6-2.05.96-3.38.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.59A10 10 0 0 0 12 22Z" />
+      <path fill="#FBBC05" d="M6.39 13.9A6.02 6.02 0 0 1 6.08 12c0-.66.11-1.3.31-1.9V7.51H3.04A10 10 0 0 0 2 12c0 1.61.39 3.14 1.04 4.49l3.35-2.59Z" />
+      <path fill="#EA4335" d="M12 5.97c1.47 0 2.79.5 3.83 1.5l2.87-2.88A9.63 9.63 0 0 0 12 2a10 10 0 0 0-8.96 5.51l3.35 2.59C7.18 7.73 9.39 5.97 12 5.97Z" />
+    </svg>
+  );
+}
+
+function ResumeJourney({ identity }: { identity: PreferenceIdentity }) {
+  const [resume, setResume] = useState<ResumeParseResult | null>(null);
+  const [readyPreferences, setReadyPreferences] =
+    useState<JobPreferencesValue | null>(null);
+  const journeyRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const heading = journeyRef.current?.querySelector<HTMLElement>("#uploader-heading");
+      heading?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  const handleResultChange = useCallback((nextResult: ResumeParseResult | null) => {
+    setResume(nextResult);
+    setReadyPreferences(null);
+  }, []);
+
+  const handleReadyChange = useCallback(
+    (preferences: JobPreferencesValue | null) =>
+      setReadyPreferences(preferences),
+    [],
+  );
+  const analysisInput: ResumeAnalysisInput | null =
+    resume && readyPreferences
+      ? { resume, preferences: readyPreferences }
+      : null;
+
+  return (
+    <div
+      ref={journeyRef}
+      className="resume-journey"
+      data-flow-step={analysisInput ? "ready" : resume ? "preferences" : "upload"}
+    >
+      <ResumeUploader onResultChange={handleResultChange} />
+      {resume && (
+        <JobPreferences identity={identity} onReadyChange={handleReadyChange} />
+      )}
+    </div>
+  );
+}
+
+export function ResumeMatchApp() {
+  const [authState, setAuthState] = useState<AuthState>({ status: "loading" });
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const choiceHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const firebaseAvailable = isFirebaseClientConfigured();
+
+  useEffect(() => {
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    const firebase = getFirebaseClient();
+
+    if (!firebase) {
+      const frame = window.requestAnimationFrame(() => {
+        if (!cancelled) {
+          setAuthState(
+            readGuestSession() ? { status: "guest" } : { status: "choice" },
+          );
+        }
+      });
+      return () => {
+        cancelled = true;
+        window.cancelAnimationFrame(frame);
+      };
+    }
+
+    const restoreAuth = async () => {
+      let persistenceUnavailable = false;
+
+      try {
+        await setPersistence(firebase.auth, browserLocalPersistence);
+      } catch {
+        persistenceUnavailable = true;
+      }
+
+      if (cancelled) return;
+
+      try {
+        unsubscribe = onAuthStateChanged(
+          firebase.auth,
+          (user) => {
+            if (cancelled) return;
+            setAuthBusy(false);
+            setAuthMessage(
+              persistenceUnavailable
+                ? "Google Sign-In is available, but this browser may not remember it after you close the tab."
+                : null,
+            );
+
+            if (user) {
+              clearGuestSession();
+              setAuthState({ status: "user", user });
+              return;
+            }
+
+            setAuthState(
+              readGuestSession() ? { status: "guest" } : { status: "choice" },
+            );
+          },
+          () => {
+            if (cancelled) return;
+            setAuthBusy(false);
+            setAuthMessage(
+              "We couldn’t restore Google Sign-In. You can still continue as a guest.",
+            );
+            setAuthState(
+              readGuestSession() ? { status: "guest" } : { status: "choice" },
+            );
+          },
+        );
+      } catch {
+        if (cancelled) return;
+        setAuthMessage(
+          "We couldn’t restore Google Sign-In. You can still continue as a guest.",
+        );
+        setAuthState(
+          readGuestSession() ? { status: "guest" } : { status: "choice" },
+        );
+      }
+    };
+
+    void restoreAuth();
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (authState.status !== "choice") return;
+    const frame = window.requestAnimationFrame(() => choiceHeadingRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [authState.status]);
+
+  const googleSignIn = async () => {
+    const firebase = getFirebaseClient();
+    if (!firebase) {
+      setAuthMessage(
+        "Google Sign-In isn’t configured in this environment. Continue as a guest to use ResumeMatch.",
+      );
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthMessage(null);
+    try {
+      await signInWithPopup(firebase.auth, firebase.googleProvider);
+    } catch (error) {
+      setAuthBusy(false);
+      setAuthMessage(readableAuthError(error));
+    }
+  };
+
+  const continueAsGuest = () => {
+    beginGuestSession();
+    setAuthMessage(null);
+    setAuthState({ status: "guest" });
+  };
+
+  const leaveGuestMode = () => {
+    clearGuestSession();
+    setAuthMessage(null);
+    setAuthState({ status: "choice" });
+  };
+
+  const googleSignOut = async () => {
+    const firebase = getFirebaseClient();
+    if (!firebase) return;
+
+    setAuthBusy(true);
+    setAuthMessage(null);
+    try {
+      await signOut(firebase.auth);
+    } catch {
+      setAuthBusy(false);
+      setAuthMessage("We couldn’t sign you out. Please try again.");
+    }
+  };
+
+  const identity =
+    authState.status === "guest"
+      ? ({ kind: "guest" } as const)
+      : authState.status === "user"
+        ? ({ kind: "user", user: authState.user } as const)
+        : null;
+
+  return (
+    <main className="page-shell">
+      <nav className="site-nav" aria-label="Primary navigation">
+        <a className="brand" href="#top" aria-label="ResumeMatch home">
+          <span className="brand-mark" aria-hidden="true">R</span>
+          <span>ResumeMatch</span>
+        </a>
+        <span className="version-pill">Resume intake</span>
+      </nav>
+
+      <div className="page-content" id="top">
+        <header className="hero">
+          <p className="eyebrow">Resume ingestion, simplified</p>
+          <h1>See what your resume says, in plain text.</h1>
+          <p className="hero-copy">
+            Upload a PDF or DOCX resume, review the extracted text, and add your job
+            preferences. No AI interpretation yet—just a clean foundation for the
+            next step.
+          </p>
+        </header>
+
+        {authState.status === "loading" && (
+          <section className="auth-card auth-card--loading" aria-label="Loading account">
+            <span className="spinner" aria-hidden="true" />
+            <p role="status">Restoring your session…</p>
+          </section>
+        )}
+
+        {authState.status === "choice" && (
+          <section className="auth-card" aria-labelledby="access-heading">
+            <p className="step-label">Get started</p>
+            <h2 id="access-heading" ref={choiceHeadingRef} tabIndex={-1}>
+              Choose how to continue
+            </h2>
+            <p className="auth-copy">
+              Sign in to save preferences across visits, or use a private guest
+              session in this tab.
+            </p>
+            <div className="auth-actions">
+              <button
+                className="google-button"
+                type="button"
+                disabled={authBusy || !firebaseAvailable}
+                onClick={() => void googleSignIn()}
+              >
+                <GoogleIcon />
+                {authBusy ? "Opening Google…" : "Sign in with Google"}
+              </button>
+              <button
+                className="secondary-button auth-secondary-button"
+                type="button"
+                disabled={authBusy}
+                onClick={continueAsGuest}
+              >
+                Continue as Guest
+              </button>
+            </div>
+            {!firebaseAvailable && (
+              <p className="configuration-note">
+                Google Sign-In isn’t available in this environment. Guest mode still
+                works normally.
+              </p>
+            )}
+            {authMessage && <p className="form-error" role="alert">{authMessage}</p>}
+          </section>
+        )}
+
+        {identity && (
+          <>
+            <aside className="account-strip" aria-label="Account status">
+              <div className="account-copy">
+                <span className="account-dot" aria-hidden="true" />
+                <span>
+                  {identity.kind === "user" ? (
+                    <>
+                      <strong>{identity.user.displayName || "Google account"}</strong>
+                      <small>{identity.user.email || "Signed in"}</small>
+                    </>
+                  ) : (
+                    <>
+                      <strong>Guest session</strong>
+                      <small>Preferences stay in this tab</small>
+                    </>
+                  )}
+                </span>
+              </div>
+              <div className="account-actions">
+                {identity.kind === "guest" && firebaseAvailable && (
+                  <button type="button" disabled={authBusy} onClick={() => void googleSignIn()}>
+                    Sign in with Google
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={authBusy}
+                  onClick={
+                    identity.kind === "user"
+                      ? () => void googleSignOut()
+                      : leaveGuestMode
+                  }
+                >
+                  {identity.kind === "user" ? "Sign out" : "Exit guest mode"}
+                </button>
+              </div>
+            </aside>
+
+            {authMessage && <p className="account-error" role="alert">{authMessage}</p>}
+
+            <ResumeJourney
+              key={identity.kind === "user" ? `user:${identity.user.uid}` : "guest"}
+              identity={identity}
+            />
+
+            <p className="privacy-note">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M10 1.75a4 4 0 0 0-4 4v2H5A1.75 1.75 0 0 0 3.25 9.5v6.75A1.75 1.75 0 0 0 5 18h10a1.75 1.75 0 0 0 1.75-1.75V9.5A1.75 1.75 0 0 0 15 7.75h-1v-2a4 4 0 0 0-4-4Zm2.5 6h-5v-2a2.5 2.5 0 0 1 5 0v2Z" />
+              </svg>
+              Resume files are processed in memory and are not saved. {identity.kind === "user"
+                ? "Your job preferences are saved to your account. "
+                : "Guest preferences stay only in this browser tab. "}
+              This version does not evaluate or score your resume.
+            </p>
+          </>
+        )}
+      </div>
+    </main>
+  );
+}
