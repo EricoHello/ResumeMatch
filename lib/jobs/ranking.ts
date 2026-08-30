@@ -1,4 +1,5 @@
 import type { ResumeProfile } from "@/lib/analysis/types";
+import type { JobPreferences } from "@/lib/preferences/types";
 
 import type { JobCandidate, JobMatch } from "./types";
 
@@ -270,6 +271,76 @@ export function rankJobCandidatesWithDiagnostics(
       ),
     remainingAfterFiltering: ranked.length,
     topRanked: ranked.slice(0, 5).map(({ candidate, score }) => ({
+      title: candidate.title,
+      score: Math.round(score * 10) / 10,
+    })),
+  };
+}
+
+export function rankJobCandidatesByPreferencesWithDiagnostics(
+  candidates: JobCandidate[],
+  preferences: JobPreferences,
+  now = Date.now(),
+): JobRankingResult {
+  const seen = new Set<string>();
+  const desiredLocation = normalizedText(preferences.targetLocation);
+  const desiredLocationTokens = tokens(preferences.targetLocation);
+  const wantsRemote = /\bremote\b/i.test(preferences.targetLocation);
+  const available = candidates
+    .map((candidate, index) => {
+      const actualLocation = normalizedText(candidate.location);
+      let score = 0;
+
+      if (
+        wantsRemote &&
+        (candidate.isRemote || actualLocation.includes("remote"))
+      ) {
+        score += 40;
+      } else if (
+        desiredLocation &&
+        actualLocation.includes(desiredLocation)
+      ) {
+        score += 40;
+      } else {
+        score +=
+          overlapRatio(desiredLocationTokens, tokens(candidate.location)) * 24;
+        if (candidate.isRemote) score += 8;
+      }
+
+      const salary = annualSalary(candidate);
+      if (
+        salary.maximum !== null &&
+        salary.maximum < preferences.minimumSalary
+      ) {
+        score -= 18;
+      } else if (
+        (salary.minimum !== null &&
+          salary.minimum >= preferences.minimumSalary) ||
+        (salary.maximum !== null &&
+          salary.maximum >= preferences.minimumSalary)
+      ) {
+        score += 20;
+      }
+
+      score += recencyScore(candidate.postedTimestamp, now);
+      return { candidate, index, score };
+    })
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .filter(({ candidate }) => {
+      const key = normalizedText(
+        `${candidate.title}|${candidate.company}|${candidate.location}`,
+      );
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  return {
+    jobs: available
+      .slice(0, 3)
+      .map(({ candidate }) => toJobMatch(candidate, [])),
+    remainingAfterFiltering: available.length,
+    topRanked: available.slice(0, 5).map(({ candidate, score }) => ({
       title: candidate.title,
       score: Math.round(score * 10) / 10,
     })),

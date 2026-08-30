@@ -2,7 +2,10 @@ import "server-only";
 
 import type { ResumeProfile } from "@/lib/analysis/types";
 
-import { rankJobCandidatesWithDiagnostics } from "./ranking";
+import {
+  rankJobCandidatesByPreferencesWithDiagnostics,
+  rankJobCandidatesWithDiagnostics,
+} from "./ranking";
 import type { JobCandidate, JobMatch } from "./types";
 
 const JSEARCH_ENDPOINT = "https://api.openwebninja.com/jsearch/search-v2";
@@ -189,19 +192,38 @@ function broadPrimaryRole(value: string) {
   return cleaned.replaceAll(",", " ").replace(/\s+/g, " ").trim();
 }
 
-function strongestSearchKeyword(profile: ResumeProfile, role: string) {
-  const roleWords = new Set(role.toLowerCase().split(/\s+/));
-  for (const keyword of profile.searchKeywords) {
-    const cleaned = cleanQueryPart(keyword, 60)
-      .replace(/\b(?:AND|OR|NOT)\b/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!cleaned) continue;
-    const words = cleaned.toLowerCase().split(/\s+/).slice(0, 4);
-    if (words.every((word) => roleWords.has(word))) continue;
-    return words.join(" ");
+function queryWords(value: string) {
+  return new Set(value.toLowerCase().split(/\s+/).filter(Boolean));
+}
+
+function broadestSupportedRole(profile: ResumeProfile) {
+  const roles = profile.targetRoles.map(broadPrimaryRole).filter(Boolean);
+  const primary = roles[0];
+  const primaryWords = queryWords(primary);
+  const broaderAlternatives = roles.slice(1).filter((role) => {
+    const words = queryWords(role);
+    return (
+      words.size >= 2 &&
+      words.size < primaryWords.size &&
+      [...words].every((word) => primaryWords.has(word))
+    );
+  });
+
+  return broaderAlternatives.sort(
+    (left, right) => queryWords(left).size - queryWords(right).size,
+  )[0] ?? primary;
+}
+
+function broaderSearchLocation(location: string) {
+  const cleaned = cleanQueryPart(location, 120);
+  if (
+    /^(?:renton|redmond|bellevue|kirkland|issaquah|tukwila|kent)(?:,?\s+wa(?:shington)?)?$/i.test(
+      cleaned,
+    )
+  ) {
+    return "Seattle, WA";
   }
-  return "";
+  return cleaned;
 }
 
 export function jSearchLocaleFor(location: string) {
@@ -219,13 +241,11 @@ export function jSearchLocaleFor(location: string) {
 }
 
 export function buildJSearchQuery(profile: ResumeProfile) {
-  const role = broadPrimaryRole(profile.targetRoles[0]);
-  const keyword = strongestSearchKeyword(profile, role);
-  const location = cleanQueryPart(profile.preferences.targetLocation, 120);
+  const role = broadestSupportedRole(profile);
+  const location = broaderSearchLocation(profile.preferences.targetLocation);
   const remote = /\bremote\b/i.test(profile.preferences.targetLocation);
   return [
     role,
-    keyword,
     "jobs",
     remote ? "remote" : `in ${location}`,
   ]
@@ -233,11 +253,31 @@ export function buildJSearchQuery(profile: ResumeProfile) {
     .join(" ");
 }
 
+const COUNTRY_NAMES: Record<string, string> = {
+  au: "Australia",
+  ca: "Canada",
+  de: "Germany",
+  es: "Spain",
+  fr: "France",
+  gb: "United Kingdom",
+  us: "United States",
+};
+
+export function buildSmokeTestJSearchQuery(profile: ResumeProfile) {
+  const locale = jSearchLocaleFor(profile.preferences.targetLocation);
+  const location = cleanQueryPart(profile.preferences.targetLocation, 120);
+  return /\bremote\b/i.test(location)
+    ? `remote jobs in ${COUNTRY_NAMES[locale.country] ?? "United States"}`
+    : `jobs in ${location}`;
+}
+
 export class JSearchClient {
   constructor(
     private readonly apiKey = process.env.OPENWEBNINJA_API_KEY?.trim(),
     private readonly fetchImplementation: typeof fetch = fetch,
     private readonly logger: JobSearchLogger = console,
+    private readonly smokeTestEnabled =
+      process.env.JOB_SEARCH_SMOKE_TEST === "true",
   ) {}
 
   private debug(message: string, data: unknown) {
@@ -254,12 +294,16 @@ export class JSearchClient {
       throw new JSearchConfigurationError("OPENWEBNINJA_API_KEY is not configured.");
     }
 
-    const query = buildJSearchQuery(profile);
+    const query = this.smokeTestEnabled
+      ? buildSmokeTestJSearchQuery(profile)
+      : buildJSearchQuery(profile);
     const locale = jSearchLocaleFor(profile.preferences.targetLocation);
     const url = new URL(JSEARCH_ENDPOINT);
     url.searchParams.set("query", query);
     url.searchParams.set("country", locale.country);
     url.searchParams.set("language", locale.language);
+    this.debug("smoke-test mode enabled", this.smokeTestEnabled);
+    this.debug("resume matching enabled", !this.smokeTestEnabled);
     this.debug("generated JSearch query", query);
 
     let response: Response;
@@ -289,7 +333,12 @@ export class JSearchClient {
     this.debug("number of raw jobs returned", parsed.rawJobCount);
     this.debug("number usable after field normalization", parsed.candidates.length);
 
-    const ranked = rankJobCandidatesWithDiagnostics(parsed.candidates, profile);
+    const ranked = this.smokeTestEnabled
+      ? rankJobCandidatesByPreferencesWithDiagnostics(
+          parsed.candidates,
+          profile.preferences,
+        )
+      : rankJobCandidatesWithDiagnostics(parsed.candidates, profile);
     this.debug("number remaining after filtering", ranked.remainingAfterFiltering);
     this.debug("top ranked scores/titles", ranked.topRanked);
     return ranked.jobs;

@@ -196,8 +196,9 @@ export function JobSearch({ profile }: { profile: ResumeProfile }) {
       {state.status === "idle" && (
         <div className="job-search-start">
           <p>
-            ResumeMatch will make one live search using your target roles,
-            location, and minimum salary, then rank the best three results locally.
+            ResumeMatch will make one live search using a resume-supported target
+            role and your preferred area, then rank the best three available
+            results using your complete profile and minimum salary.
           </p>
           <button
             type="button"
@@ -252,7 +253,7 @@ export function JobSearch({ profile }: { profile: ResumeProfile }) {
                 <span className="analysis-check" aria-hidden="true">✓</span>
                 <div>
                   <strong>Your current matches are ready</strong>
-                  <p>Salary-unlisted jobs remain eligible when the overall match is strong.</p>
+                  <p>Jobs without published salary information remain eligible.</p>
                 </div>
               </div>
               <ol className="job-list" aria-label="Relevant job matches">

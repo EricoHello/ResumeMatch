@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ResumeProfile } from "@/lib/analysis/types";
 import {
+  rankJobCandidatesByPreferencesWithDiagnostics,
   rankJobCandidates,
   rankJobCandidatesWithDiagnostics,
 } from "@/lib/jobs/ranking";
@@ -167,5 +168,47 @@ describe("rankJobCandidates", () => {
     expect(result.topRanked).toEqual([
       expect.objectContaining({ title: "Staff Software Engineer" }),
     ]);
+  });
+
+  it("ranks unrelated jobs using only location, salary, and recency", () => {
+    const result = rankJobCandidatesByPreferencesWithDiagnostics(
+      [
+        candidate("qualified-local", {
+          title: "Dental Hygienist",
+          description: "No resume relationship.",
+          postedAt: "20 days ago",
+          postedTimestamp: now / 1_000 - 20 * 86_400,
+        }),
+        candidate("missing-salary-local", {
+          title: "Retail Store Manager",
+          description: "No resume relationship.",
+          salary: null,
+          minimumSalary: null,
+          maximumSalary: null,
+        }),
+        candidate("below-salary-local", {
+          title: "Boatswain's Mate",
+          description: "No resume relationship.",
+          salary: "$80,000 / year",
+          minimumSalary: 80_000,
+          maximumSalary: 80_000,
+        }),
+        candidate("qualified-wrong-location", {
+          title: "Accountant",
+          description: "No resume relationship.",
+          location: "Miami, FL",
+        }),
+      ],
+      PROFILE.preferences,
+      now,
+    );
+
+    expect(result.jobs.map((job) => job.id)).toEqual([
+      "qualified-local",
+      "missing-salary-local",
+      "below-salary-local",
+    ]);
+    expect(result.jobs[1].salary).toBeNull();
+    expect(result.jobs.every((job) => job.matchedSkills.length === 0)).toBe(true);
   });
 });

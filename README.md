@@ -67,6 +67,8 @@ Never prefix this key with `NEXT_PUBLIC_`. The browser calls ResumeMatch's local
 
 Job-search pipeline diagnostics are logged automatically in development. To temporarily enable the same safe diagnostics in Railway logs, set `JOB_SEARCH_DEBUG=true`. The logs include the generated query, raw and normalized job counts, the count remaining after relevance filtering, and top titles/scores; they never include API keys or resume text.
 
+Resume matching is enabled by default. Set `JOB_SEARCH_SMOKE_TEST=true` only when isolating the provider path: that mode uses only the saved location and orders results using location, available salary, and recency. With the switch omitted or set to `false`, ResumeMatch chooses the broadest resume-supported target role for the provider query and uses the complete candidate profile, exact location preference, and minimum salary for local ranking. Known nearby suburbs may be expanded to their metro area for the provider query so a single request has enough candidates to rank.
+
 Start the app and open [http://localhost:3000](http://localhost:3000):
 
 ```bash
@@ -107,7 +109,7 @@ BASE_URL=https://your-service.up.railway.app npm run test:e2e
 
 `POST /api/resumes/analyze` accepts extracted resume text plus validated job preferences, makes one structured-output request to Gemini 3.5 Flash-Lite, and returns the session-only resume profile. The route has strict input limits and never returns the API key. Both signed-in and guest users can use it.
 
-`POST /api/jobs/search` accepts the already-generated candidate profile, makes one broad request to JSearch's `search-v2` endpoint, and locally selects up to three results. The provider query uses the primary target role, one strongest non-duplicate search keyword, and the preferred location. Location, recency, and salary remain ranking preferences rather than hard filters; a missing salary is neutral rather than grounds for exclusion. The route does not invoke Gemini, accept raw resume text, or expose the OpenWeb Ninja key.
+`POST /api/jobs/search` accepts the already-generated candidate profile, makes one broad request to JSearch's `search-v2` endpoint, and locally selects up to three results. The provider query uses one broad resume-supported target role and a search-area location; resume keywords stay out of that single provider query so they cannot over-constrain it. The complete profile, exact location, recency, and salary participate in local ranking; a missing salary is neutral rather than grounds for exclusion. The route does not invoke Gemini, accept raw resume text, or expose the OpenWeb Ninja key.
 
 The AI and job-search routes include small per-client, in-process rate limits to reduce accidental
 free-tier quota exhaustion. These are intentionally best-effort guards: they reset on

@@ -5,6 +5,7 @@ vi.mock("server-only", () => ({}));
 import type { ResumeProfile } from "@/lib/analysis/types";
 import {
   buildJSearchQuery,
+  buildSmokeTestJSearchQuery,
   JSearchClient,
   JSearchConfigurationError,
   jSearchLocaleFor,
@@ -62,6 +63,7 @@ describe("JSearchClient", () => {
       "server-secret",
       fetchMock as typeof fetch,
       logger,
+      false,
     );
     const jobs = await client.search(PROFILE, new AbortController().signal);
 
@@ -71,7 +73,7 @@ describe("JSearchClient", () => {
       "https://api.openwebninja.com/jsearch/search-v2",
     );
     expect(input.searchParams.get("query")).toContain("Staff Software Engineer");
-    expect(input.searchParams.get("query")).toContain("distributed systems");
+    expect(input.searchParams.get("query")).not.toContain("distributed systems");
     expect(input.searchParams.get("query")).toContain("Seattle, WA");
     expect(input.searchParams.get("cursor")).toBeNull();
     expect(input.searchParams.get("num_pages")).toBeNull();
@@ -85,6 +87,10 @@ describe("JSearchClient", () => {
     expect(logInfo).toHaveBeenCalledWith(
       "[ResumeMatch job search] generated JSearch query",
       expect.stringContaining("Staff Software Engineer"),
+    );
+    expect(logInfo).toHaveBeenCalledWith(
+      "[ResumeMatch job search] resume matching enabled",
+      true,
     );
     expect(logInfo).toHaveBeenCalledWith(
       "[ResumeMatch job search] number of raw jobs returned",
@@ -103,7 +109,12 @@ describe("JSearchClient", () => {
   });
 
   it("does not call the provider without a configured key", async () => {
-    const client = new JSearchClient(undefined, fetchMock as typeof fetch, logger);
+    const client = new JSearchClient(
+      undefined,
+      fetchMock as typeof fetch,
+      logger,
+      false,
+    );
     await expect(
       client.search(PROFILE, new AbortController().signal),
     ).rejects.toBeInstanceOf(JSearchConfigurationError);
@@ -116,11 +127,51 @@ describe("JSearchClient", () => {
       "server-secret",
       fetchMock as typeof fetch,
       logger,
+      false,
     );
     await expect(
       client.search(PROFILE, new AbortController().signal),
     ).rejects.toMatchObject({ status: 429 });
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("isolation mode ignores the resume and returns three preference-ranked jobs", async () => {
+    const rawJobs = [
+      ["a", "Dental Hygienist"],
+      ["b", "Retail Store Manager"],
+      ["c", "Truck Driver"],
+      ["d", "Staff Accountant"],
+    ].map(([id, title]) => ({ ...providerJob(id), job_title: title }));
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: rawJobs }), { status: 200 }),
+    );
+    const client = new JSearchClient(
+      "server-secret",
+      fetchMock as typeof fetch,
+      logger,
+      true,
+    );
+
+    const jobs = await client.search(PROFILE, new AbortController().signal);
+    const [input] = fetchMock.mock.calls[0] as [URL, RequestInit];
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(input.searchParams.get("query")).toBe("jobs in Seattle, WA");
+    expect(input.searchParams.get("query")).not.toContain("Software");
+    expect(input.searchParams.get("query")).not.toContain("TypeScript");
+    expect(jobs.map((job) => job.title)).toEqual([
+      "Dental Hygienist",
+      "Retail Store Manager",
+      "Truck Driver",
+    ]);
+    expect(logInfo).toHaveBeenCalledWith(
+      "[ResumeMatch job search] smoke-test mode enabled",
+      true,
+    );
+    expect(logInfo).toHaveBeenCalledWith(
+      "[ResumeMatch job search] number remaining after filtering",
+      4,
+    );
   });
 });
 
@@ -175,11 +226,40 @@ describe("parseJSearchResponse", () => {
 });
 
 describe("broad query construction", () => {
+  it("builds a location-only query that contains no resume details in isolation mode", () => {
+    expect(buildSmokeTestJSearchQuery(PROFILE)).toBe("jobs in Seattle, WA");
+    expect(
+      buildSmokeTestJSearchQuery({
+        ...PROFILE,
+        summary: "Completely different resume.",
+        skills: ["Dentistry"],
+        recentJobTitles: ["Dental Hygienist"],
+        targetRoles: ["Dental Hygienist"],
+        searchKeywords: ["patient care"],
+      }),
+    ).toBe("jobs in Seattle, WA");
+    expect(
+      buildSmokeTestJSearchQuery({
+        ...PROFILE,
+        preferences: {
+          targetLocation: "London, United Kingdom",
+          minimumSalary: 90_000,
+        },
+      }),
+    ).toBe("jobs in London, United Kingdom");
+    expect(
+      buildSmokeTestJSearchQuery({
+        ...PROFILE,
+        preferences: { targetLocation: "Remote", minimumSalary: 145_000 },
+      }),
+    ).toBe("remote jobs in United States");
+  });
+
   it.each([
     {
       label: "software profile in a US city",
       profile: PROFILE,
-      expected: "Staff Software Engineer distributed systems jobs in Seattle, WA",
+      expected: "Staff Software Engineer jobs in Seattle, WA",
       locale: { country: "us", language: "en" },
     },
     {
@@ -193,7 +273,7 @@ describe("broad query construction", () => {
         searchKeywords: ["go-to-market strategy", "product launches", "SaaS"],
         preferences: { targetLocation: "Remote", minimumSalary: 150_000 },
       },
-      expected: "Senior Product Marketing Manager go-to-market strategy jobs remote",
+      expected: "Product Marketing Manager jobs remote",
       locale: { country: "us", language: "en" },
     },
     {
@@ -204,12 +284,37 @@ describe("broad query construction", () => {
         searchKeywords: ["financial planning", "forecasting"],
         preferences: { targetLocation: "London, United Kingdom", minimumSalary: 90_000 },
       },
-      expected: "Senior Financial Analyst financial planning jobs in London, United Kingdom",
+      expected: "Senior Financial Analyst jobs in London, United Kingdom",
       locale: { country: "gb", language: "en" },
     },
   ])("builds one compact query for $label", ({ profile, expected, locale }) => {
     expect(buildJSearchQuery(profile as ResumeProfile)).toBe(expected);
     expect(jSearchLocaleFor(profile.preferences.targetLocation)).toEqual(locale);
+  });
+
+  it("broadens the reproduced robotics resume query to its supported metro role", () => {
+    expect(
+      buildJSearchQuery({
+        ...PROFILE,
+        experienceLevel: "mid",
+        recentJobTitles: [
+          "Robotics Operations Engineer",
+          "Endpoint Systems Support Technician",
+        ],
+        targetRoles: [
+          "Robotics Operations Engineer",
+          "Robotics Engineer",
+          "Automation Engineer",
+          "Systems Support Engineer",
+        ],
+        searchKeywords: [
+          "Robotics Operations",
+          "Autonomous Systems",
+          "Fleet Readiness",
+        ],
+        preferences: { targetLocation: "Renton", minimumSalary: 100_000 },
+      }),
+    ).toBe("Robotics Engineer jobs in Seattle, WA");
   });
 
   it("never adds every target role or the full skill list", () => {
