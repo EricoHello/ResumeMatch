@@ -13,6 +13,7 @@ import {
   JobPreferences,
   type PreferenceIdentity,
 } from "@/components/job-preferences";
+import { JobSearch } from "@/components/job-search";
 import {
   ResumeAnalysis,
   type ResumeAnalysisState,
@@ -217,6 +218,9 @@ function ResumeJourney({ identity }: { identity: PreferenceIdentity }) {
       )}
       {analysisState && (
         <ResumeAnalysis state={analysisState} onRetry={retryAnalysis} />
+      )}
+      {analysisState?.status === "success" && (
+        <JobSearch profile={analysisState.profile} />
       )}
     </div>
   );

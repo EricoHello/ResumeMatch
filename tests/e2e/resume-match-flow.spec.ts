@@ -17,6 +17,45 @@ const PROFILE_DETAILS = {
   searchKeywords: ["TypeScript", "distributed systems", "platform engineering"],
 } as const;
 
+const JOB_MATCHES = [
+  {
+    id: "staff-one",
+    title: "Staff Software Engineer",
+    company: "Northstar Systems",
+    location: "Seattle, WA",
+    salary: "$165,000–$195,000 / year",
+    applyUrl: "https://jobs.example.test/staff-one",
+    postedAt: "2 days ago",
+    employmentType: "FULLTIME",
+    isRemote: false,
+    matchedSkills: ["TypeScript", "Distributed systems"],
+  },
+  {
+    id: "platform-two",
+    title: "Senior Platform Engineer",
+    company: "Waypoint",
+    location: "Remote — United States",
+    salary: null,
+    applyUrl: "https://jobs.example.test/platform-two",
+    postedAt: "5 days ago",
+    employmentType: "FULLTIME",
+    isRemote: true,
+    matchedSkills: ["API design"],
+  },
+  {
+    id: "backend-three",
+    title: "Senior Backend Engineer",
+    company: "Atlas Cloud",
+    location: "Bellevue, WA",
+    salary: "$150,000 / year",
+    applyUrl: "https://jobs.example.test/backend-three",
+    postedAt: "1 week ago",
+    employmentType: "FULLTIME",
+    isRemote: false,
+    matchedSkills: ["TypeScript"],
+  },
+] as const;
+
 type AnalysisPreferences = {
   targetLocation: string;
   minimumSalary: number;
@@ -82,6 +121,29 @@ async function mockDeferredAnalysis(
   return { releaseResponse, requests };
 }
 
+async function mockDeferredJobSearch(page: Page) {
+  const requests: Request[] = [];
+  let releaseResponse = () => {};
+  const responseGate = new Promise<void>((resolve) => {
+    releaseResponse = resolve;
+  });
+
+  await page.route("**/api/jobs/search", async (route) => {
+    requests.push(route.request());
+    await responseGate;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        jobs: JOB_MATCHES,
+        searchedAt: "2026-08-30T16:00:00.000Z",
+      }),
+    });
+  });
+
+  return { releaseResponse, requests };
+}
+
 function watchPreferenceRequests(page: Page) {
   const requests: Request[] = [];
 
@@ -134,11 +196,12 @@ test("offers Google Sign-In and guest mode before showing the uploader", async (
   await expect(page.getByLabel("Upload resume")).toHaveCount(0);
 });
 
-test("shows analysis progress and completes the structured guest profile", async ({
+test("completes analysis and one live search for three guest job matches", async ({
   page,
 }) => {
   const preferenceRequests = watchPreferenceRequests(page);
   const jobSearchRequests = watchJobSearchRequests(page);
+  const jobSearch = await mockDeferredJobSearch(page);
   const analysis = await mockDeferredAnalysis(page, {
     targetLocation: "Seattle, WA",
     minimumSalary: 145000,
@@ -160,7 +223,7 @@ test("shows analysis progress and completes the structured guest profile", async
   await page.getByRole("button", { name: "Continue", exact: true }).click();
 
   try {
-    await expect(page.getByText("Step 3 of 3", { exact: true })).toBeVisible();
+    await expect(page.getByText("Step 3 of 4", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Analyzing your resume" }),
     ).toBeVisible();
@@ -210,11 +273,49 @@ test("shows analysis progress and completes the structured guest profile", async
   });
   expect(preferenceRequests).toHaveLength(0);
   expect(jobSearchRequests).toHaveLength(0);
+
+  await expect(page.getByText("Step 4 of 4", { exact: true })).toBeVisible();
+  const findJobs = page.getByRole("button", { name: "Find 3 job matches" });
+  await expect(findJobs).toBeVisible();
+  await findJobs.click();
+
+  try {
+    await expect(
+      page.getByRole("heading", { name: "Searching current jobs" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("progressbar", { name: "Job search progress" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("status").filter({
+        hasText: "Finding and ranking relevant openings…",
+      }),
+    ).toBeVisible();
+    await expect.poll(() => jobSearch.requests.length).toBe(1);
+  } finally {
+    jobSearch.releaseResponse();
+  }
+
   await expect(
-    page.getByRole("button", {
-      name: /find (?:relevant )?jobs|search jobs|view job matches/i,
+    page.getByRole("heading", { name: "3 relevant jobs found" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("list", { name: "Relevant job matches" }).getByRole("listitem"),
+  ).toHaveCount(3);
+  await expect(page.getByText("Northstar Systems")).toBeVisible();
+  await expect(page.getByText("Salary not listed")).toBeVisible();
+  await expect(page.getByRole("link", { name: /view & apply/i })).toHaveCount(3);
+
+  expect(jobSearchRequests).toHaveLength(1);
+  expect(jobSearch.requests).toHaveLength(1);
+  expect(jobSearch.requests[0].postDataJSON()).toEqual({
+    profile: analysisProfile({
+      targetLocation: "Seattle, WA",
+      minimumSalary: 145000,
     }),
-  ).toHaveCount(0);
+  });
+  expect(jobSearch.requests[0].postDataJSON()).not.toHaveProperty("resumeText");
+  expect(analysis.requests).toHaveLength(1);
 });
 
 test("validates guest preferences and leaves them editable after completion", async ({

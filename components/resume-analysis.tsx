@@ -98,7 +98,7 @@ export function ResumeAnalysis({ state, onRetry }: ResumeAnalysisProps) {
     >
       <div className="card-heading analysis-card-heading">
         <div>
-          <p className="step-label">Step 3 of 3</p>
+          <p className="step-label">Step 3 of 4</p>
           <h2 id="analysis-heading" ref={headingRef} tabIndex={-1}>
             {state.status === "loading" && "Analyzing your resume"}
             {state.status === "error" && "Couldn’t analyze your resume"}

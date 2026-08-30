@@ -306,7 +306,7 @@ export function ResumeUploader({ onResultChange }: ResumeUploaderProps) {
     <section className="uploader-card" aria-labelledby="uploader-heading">
       <div className="card-heading">
         <div>
-          <p className="step-label">Step 1 of 3</p>
+          <p className="step-label">Step 1 of 4</p>
           <h2 id="uploader-heading" tabIndex={-1}>Upload your resume</h2>
         </div>
         <span className="format-badge">PDF · DOCX</span>

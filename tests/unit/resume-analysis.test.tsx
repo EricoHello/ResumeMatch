@@ -41,7 +41,7 @@ describe("ResumeAnalysis", () => {
     expect(
       screen.getByRole("heading", { name: "Analyzing your resume" }),
     ).toBeTruthy();
-    expect(screen.getByText("Step 3 of 3")).toBeTruthy();
+    expect(screen.getByText("Step 3 of 4")).toBeTruthy();
     expect(screen.getByRole("status").textContent).toContain(
       "Gemini is analyzing your resume…",
     );

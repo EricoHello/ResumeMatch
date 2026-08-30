@@ -1,12 +1,12 @@
 # ResumeMatch AI
 
-ResumeMatch now supports resume intake and AI profile extraction:
+ResumeMatch now supports the complete POC matching flow:
 
 ```text
-Google Sign-In or Guest → Resume upload → Text extraction → Job preferences → AI resume profile
+Google Sign-In or Guest → Resume upload → Text extraction → Job preferences → AI resume profile → 3 live job matches
 ```
 
-PDF and DOCX files are parsed into raw text. Signed-in users can load and save job preferences through a Firebase-authenticated Next.js API; guest preferences stay only in the current browser tab. The extracted text and preferences are sent once to the free-tier Gemini 3.5 Flash-Lite model to prepare a structured profile for the future job-search step.
+PDF and DOCX files are parsed into raw text. Signed-in users can load and save job preferences through a Firebase-authenticated Next.js API; guest preferences stay only in the current browser tab. The extracted text and preferences are sent once to the free-tier Gemini 3.5 Flash-Lite model. When the user starts a search, ResumeMatch combines that existing profile with the saved location and minimum salary in one JSearch request, then ranks and returns up to three current listings locally without running Gemini again.
 
 ## Included
 
@@ -17,6 +17,9 @@ PDF and DOCX files are parsed into raw text. Signed-in users can load and save j
 - Raw extracted-text display
 - Target city/location and annual minimum salary questions
 - Fast, structured AI resume parsing with Gemini 3.5 Flash-Lite
+- One-request live job search through JSearch by OpenWeb Ninja
+- Local relevance ranking using target roles, skills, location, recency, and available salary
+- Three accessible job cards with direct view/apply links and graceful missing-salary handling
 - Accessible processing, success, error, and retry states
 - Owner-scoped Firestore preference persistence for signed-in users
 - Strict API validation and Firebase ID-token verification
@@ -24,7 +27,7 @@ PDF and DOCX files are parsed into raw text. Signed-in users can load and save j
 - Session-only AI profile data with no resume-profile Firestore writes
 - Railway configuration and health check
 
-Uploaded files, extracted resume text, and generated AI profiles are processed in memory and are not persisted by ResumeMatch. On Gemini's free tier, Google states that submitted content may be used to improve its products; review the [Gemini API pricing and data-use details](https://ai.google.dev/gemini-api/docs/pricing) before using real personal data.
+Uploaded files, extracted resume text, generated AI profiles, and job results are processed in memory and are not persisted by ResumeMatch. Only a compact search query derived from the structured profile is sent to JSearch; resume text is not sent to the job provider. On Gemini's free tier, Google states that submitted content may be used to improve its products; review the [Gemini API pricing and data-use details](https://ai.google.dev/gemini-api/docs/pricing) before using real personal data.
 
 ## Local setup
 
@@ -53,6 +56,14 @@ GEMINI_API_KEY=your-google-ai-studio-key
 Never prefix the Gemini key with `NEXT_PUBLIC_`; the browser calls the local analysis route and the key remains on the server.
 Restrict the key to the Generative Language API in Google Cloud so it cannot be
 used with unrelated Google APIs if it is ever exposed outside the application.
+
+Set the OpenWeb Ninja key as a second server-only variable:
+
+```dotenv
+OPENWEBNINJA_API_KEY=your-openweb-ninja-key
+```
+
+Never prefix this key with `NEXT_PUBLIC_`. The browser calls ResumeMatch's local job-search route, so the provider credential is not sent to the client.
 
 Start the app and open [http://localhost:3000](http://localhost:3000):
 
@@ -94,8 +105,10 @@ BASE_URL=https://your-service.up.railway.app npm run test:e2e
 
 `POST /api/resumes/analyze` accepts extracted resume text plus validated job preferences, makes one structured-output request to Gemini 3.5 Flash-Lite, and returns the session-only resume profile. The route has strict input limits and never returns the API key. Both signed-in and guest users can use it.
 
-The route includes a small per-client, in-process rate limit to reduce accidental
-free-tier quota exhaustion. It is intentionally a best-effort guard: it resets on
+`POST /api/jobs/search` accepts the already-generated candidate profile, makes one combined request to JSearch's `search-v2` endpoint, and locally selects up to three results. It prefers target-role, skill, location, recency, and salary matches; a missing salary is neutral rather than grounds for exclusion. The route does not invoke Gemini, accept raw resume text, or expose the OpenWeb Ninja key.
+
+The AI and job-search routes include small per-client, in-process rate limits to reduce accidental
+free-tier quota exhaustion. These are intentionally best-effort guards: they reset on
 deploys and is not shared across Railway replicas. Use a durable shared limiter or
 an edge protection layer before increasing public traffic or replica count.
 
@@ -134,14 +147,16 @@ Configure these variables on the Railway service:
 - `NEXT_PUBLIC_FIREBASE_APP_ID`
 - `FIREBASE_SERVICE_ACCOUNT_JSON` containing the complete service-account JSON object
 - `GEMINI_API_KEY` containing a free-tier Google AI Studio API key
+- `OPENWEBNINJA_API_KEY` containing the OpenWeb Ninja key for JSearch
 
 The public Firebase variables must be present during the Railway build because Next.js embeds them in the browser bundle. The Admin credential is server-only and is read lazily at request time. Keep the Railway domain in Firebase Authentication's authorized-domain list.
 
-After deployment, verify both formats and both access modes: Google Sign-In with preference save/load/update, and guest mode with no `/api/preferences` request. In both modes, confirm that AI processing reaches the success state without exposing the Gemini key in browser requests or bundles.
+After deployment, verify both formats and both access modes: Google Sign-In with preference save/load/update, and guest mode with no `/api/preferences` request. In both modes, confirm that AI processing reaches success and one explicit job search returns up to three view/apply links without exposing either server key in browser requests or bundles.
 
 ## Current boundaries
 
-- AI parsing stops after it creates the structured resume profile. Job search, matching, scoring, and recommendations are not implemented yet.
+- Job results and profiles remain session-only; saved searches and applications are not implemented.
+- The POC returns the strongest available current matches but does not guarantee that every listing publishes salary data.
 - Scanned/image-only PDFs need OCR, which is not included.
 - Legacy `.doc` files are rejected; only DOCX is supported.
 - Extraction returns normalized plain text rather than reconstructing page layout.
