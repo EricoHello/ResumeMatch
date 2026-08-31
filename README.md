@@ -155,6 +155,12 @@ Configure these variables on the Railway service:
 - `GEMINI_API_KEY` containing a free-tier Google AI Studio API key
 - `OPENWEBNINJA_API_KEY` containing the OpenWeb Ninja key for JSearch
 
+To temporarily take the application offline, set `MAINTENANCE_MODE=true`. The
+home page will show the ResumeMatch maintenance screen, and the resume parsing,
+Gemini analysis, and JSearch routes will return `503` without doing any work.
+Set the variable to `false` (or remove it) to restore the application. The health
+check remains available in either mode.
+
 The public Firebase variables must be present during the Railway build because Next.js embeds them in the browser bundle. The Admin credential is server-only and is read lazily at request time. Keep the Railway domain in Firebase Authentication's authorized-domain list.
 
 After deployment, verify both formats and both access modes: Google Sign-In with preference save/load/update, and guest mode with no `/api/preferences` request. In both modes, confirm that AI processing reaches success and one explicit job search returns up to three view/apply links without exposing either server key in browser requests or bundles.

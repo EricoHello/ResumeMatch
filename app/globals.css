@@ -202,6 +202,87 @@ button {
   margin: 60px auto 0;
 }
 
+.maintenance-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.maintenance-content {
+  width: min(680px, 100%);
+  flex: 1;
+  margin: 0 auto;
+  padding: 70px 0 130px;
+  display: grid;
+  place-items: center;
+}
+
+.maintenance-card {
+  width: 100%;
+  padding: clamp(38px, 7vw, 64px);
+  border: 1px solid var(--card-border);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.maintenance-mark {
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: var(--brand-soft);
+}
+
+.maintenance-mark span {
+  width: 25px;
+  height: 25px;
+  border: 3px solid var(--brand);
+  border-top-color: transparent;
+  border-radius: 50%;
+}
+
+.maintenance-card h1 {
+  margin: 0;
+  font-size: clamp(36px, 7vw, 54px);
+  font-weight: 760;
+  letter-spacing: -0.055em;
+  line-height: 1.06;
+}
+
+.maintenance-copy {
+  max-width: 540px;
+  margin: 20px auto 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.maintenance-status {
+  width: fit-content;
+  margin: 28px auto 0;
+  padding: 9px 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--brand-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.maintenance-status span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand);
+}
+
 .hero {
   margin-bottom: 34px;
   text-align: center;
@@ -2122,6 +2203,15 @@ input:disabled {
 
   .page-content {
     margin-top: 38px;
+  }
+
+  .maintenance-content {
+    padding: 38px 0 82px;
+  }
+
+  .maintenance-card {
+    padding: 36px 20px;
+    border-radius: 20px;
   }
 
   .hero {

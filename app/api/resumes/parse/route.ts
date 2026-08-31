@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isMaintenanceMode, maintenanceResponse } from "@/lib/maintenance";
 import {
   isResumeParseError,
   parseResumeFile,
@@ -32,6 +33,10 @@ function errorResponse(error: ResumeParseError) {
 }
 
 export async function POST(request: Request) {
+  if (isMaintenanceMode()) {
+    return maintenanceResponse();
+  }
+
   const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
 
   if (!contentType.startsWith("multipart/form-data")) {

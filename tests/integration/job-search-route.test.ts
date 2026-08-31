@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -84,12 +84,31 @@ function request(body: string, contentType = "application/json") {
 
 describe("POST /api/jobs/search", () => {
   beforeEach(() => {
+    vi.stubEnv("MAINTENANCE_MODE", "false");
     jsearchMocks.search.mockReset().mockResolvedValue(JOBS);
     rateLimitMocks.consume.mockReset().mockReturnValue({
       allowed: true,
       remaining: 2,
     });
     rateLimitMocks.clientKey.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("returns maintenance mode without consuming quota or calling JSearch", async () => {
+    vi.stubEnv("MAINTENANCE_MODE", "true");
+
+    const response = await POST(request(JSON.stringify({ profile: PROFILE })));
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "MAINTENANCE_MODE" },
+    });
+    expect(rateLimitMocks.consume).not.toHaveBeenCalled();
+    expect(jsearchMocks.search).not.toHaveBeenCalled();
   });
 
   it("searches once with the existing profile and returns no-store results", async () => {

@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
 
 import { POST } from "@/app/api/resumes/parse/route";
 import {
@@ -26,6 +28,31 @@ function createUploadRequest(file?: File): Request {
 }
 
 describe("POST /api/resumes/parse", () => {
+  beforeEach(() => {
+    vi.stubEnv("MAINTENANCE_MODE", "false");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("returns maintenance mode before reading or parsing an upload", async () => {
+    vi.stubEnv("MAINTENANCE_MODE", "true");
+
+    const response = await POST(
+      new Request(ENDPOINT, { method: "POST", body: "not multipart data" }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: "MAINTENANCE_MODE",
+        message: expect.stringContaining("currently in development"),
+      },
+    });
+  });
+
   it("parses a generated PDF through the complete route", async () => {
     const file = fileFromBuffer(
       await createPdfResume(),

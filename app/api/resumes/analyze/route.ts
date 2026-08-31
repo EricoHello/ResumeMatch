@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isMaintenanceMode, maintenanceResponse } from "@/lib/maintenance";
 import {
   GeminiConfigurationError,
   GeminiProviderError,
@@ -98,6 +99,10 @@ async function readBoundedJson(request: Request): Promise<unknown> {
 }
 
 export async function POST(request: Request) {
+  if (isMaintenanceMode()) {
+    return maintenanceResponse();
+  }
+
   const mediaType =
     request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ??
     "";

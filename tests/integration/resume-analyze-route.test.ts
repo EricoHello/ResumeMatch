@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -85,11 +85,30 @@ function analyzeRequest(
 
 describe("POST /api/resumes/analyze", () => {
   beforeEach(() => {
+    vi.stubEnv("MAINTENANCE_MODE", "false");
     geminiMocks.analyze.mockReset();
     rateLimitMocks.clientKey.mockClear();
     rateLimitMocks.consume.mockReset();
     rateLimitMocks.consume.mockReturnValue({ allowed: true, remaining: 4 });
     geminiMocks.analyze.mockResolvedValue(PROFILE);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("returns maintenance mode without consuming quota or calling Gemini", async () => {
+    vi.stubEnv("MAINTENANCE_MODE", "true");
+
+    const response = await POST(analyzeRequest(JSON.stringify(INPUT)));
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "MAINTENANCE_MODE" },
+    });
+    expect(rateLimitMocks.consume).not.toHaveBeenCalled();
+    expect(geminiMocks.analyze).not.toHaveBeenCalled();
   });
 
   it("analyzes normalized text and returns only the profile", async () => {
