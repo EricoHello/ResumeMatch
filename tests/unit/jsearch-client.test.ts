@@ -19,7 +19,13 @@ const PROFILE: ResumeProfile = {
   recentJobTitles: ["Senior Software Engineer"],
   targetRoles: ["Staff Software Engineer", "Platform Engineer"],
   searchKeywords: ["distributed systems"],
-  preferences: { targetLocation: "Seattle, WA", minimumSalary: 145_000 },
+  preferences: {
+    targetLocation: "Seattle, WA",
+    additionalLocations: [],
+    radiusMiles: 25,
+    workArrangement: "any",
+    minimumSalary: 145_000,
+  },
 };
 
 function providerJob(id: string) {
@@ -221,6 +227,7 @@ describe("parseJSearchResponse", () => {
       maximumSalary: 180000,
       employmentType: "FULLTIME",
       isRemote: true,
+      workArrangement: "remote",
     });
   });
 });
@@ -243,6 +250,9 @@ describe("broad query construction", () => {
         ...PROFILE,
         preferences: {
           targetLocation: "London, United Kingdom",
+          additionalLocations: [],
+          radiusMiles: 25,
+          workArrangement: "any",
           minimumSalary: 90_000,
         },
       }),
@@ -250,7 +260,13 @@ describe("broad query construction", () => {
     expect(
       buildSmokeTestJSearchQuery({
         ...PROFILE,
-        preferences: { targetLocation: "Remote", minimumSalary: 145_000 },
+        preferences: {
+          targetLocation: "Remote",
+          additionalLocations: [],
+          radiusMiles: 25,
+          workArrangement: "remote",
+          minimumSalary: 145_000,
+        },
       }),
     ).toBe("remote jobs in United States");
   });
@@ -259,7 +275,7 @@ describe("broad query construction", () => {
     {
       label: "software profile in a US city",
       profile: PROFILE,
-      expected: "Staff Software Engineer jobs in Seattle, WA",
+      expected: "Staff Software Engineer jobs within 25 miles of Seattle, WA",
       locale: { country: "us", language: "en" },
     },
     {
@@ -271,7 +287,13 @@ describe("broad query construction", () => {
           "Product Marketing Manager",
         ],
         searchKeywords: ["go-to-market strategy", "product launches", "SaaS"],
-        preferences: { targetLocation: "Remote", minimumSalary: 150_000 },
+        preferences: {
+          targetLocation: "Remote",
+          additionalLocations: [],
+          radiusMiles: 25,
+          workArrangement: "remote",
+          minimumSalary: 150_000,
+        },
       },
       expected: "Product Marketing Manager jobs remote",
       locale: { country: "us", language: "en" },
@@ -282,9 +304,15 @@ describe("broad query construction", () => {
         ...PROFILE,
         targetRoles: ["Senior Financial Analyst"],
         searchKeywords: ["financial planning", "forecasting"],
-        preferences: { targetLocation: "London, United Kingdom", minimumSalary: 90_000 },
+        preferences: {
+          targetLocation: "London, United Kingdom",
+          additionalLocations: [],
+          radiusMiles: 25,
+          workArrangement: "any",
+          minimumSalary: 90_000,
+        },
       },
-      expected: "Senior Financial Analyst jobs in London, United Kingdom",
+      expected: "Senior Financial Analyst jobs within 25 miles of London, United Kingdom",
       locale: { country: "gb", language: "en" },
     },
   ])("builds one compact query for $label", ({ profile, expected, locale }) => {
@@ -312,9 +340,59 @@ describe("broad query construction", () => {
           "Autonomous Systems",
           "Fleet Readiness",
         ],
-        preferences: { targetLocation: "Renton", minimumSalary: 100_000 },
+        preferences: {
+          targetLocation: "Renton",
+          additionalLocations: [],
+          radiusMiles: 25,
+          workArrangement: "any",
+          minimumSalary: 100_000,
+        },
       }),
-    ).toBe("Robotics Engineer jobs in Seattle, WA");
+    ).toBe("Robotics Engineer jobs within 25 miles of Seattle, WA");
+  });
+
+  it("includes multiple cities, radius, and work arrangement in the query", () => {
+    expect(
+      buildJSearchQuery({
+        ...PROFILE,
+        preferences: {
+          ...PROFILE.preferences,
+          additionalLocations: ["Portland, OR"],
+          radiusMiles: 50,
+          workArrangement: "hybrid",
+        },
+      }),
+    ).toBe(
+      "Staff Software Engineer jobs hybrid within 50 miles of Seattle, WA or Portland, OR",
+    );
+  });
+
+  it("uses the provider's remote-only filter for remote searches", async () => {
+    const localFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { jobs: [providerJob("remote")] } }), {
+        status: 200,
+      }),
+    );
+    const client = new JSearchClient(
+      "server-secret",
+      localFetch as typeof fetch,
+      { info: vi.fn() },
+      false,
+    );
+
+    await client.search(
+      {
+        ...PROFILE,
+        preferences: {
+          ...PROFILE.preferences,
+          workArrangement: "remote",
+        },
+      },
+      new AbortController().signal,
+    );
+
+    const [input] = localFetch.mock.calls[0] as [URL, RequestInit];
+    expect(input.searchParams.get("work_from_home")).toBe("true");
   });
 
   it("never adds every target role or the full skill list", () => {

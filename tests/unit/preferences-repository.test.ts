@@ -8,6 +8,9 @@ import { FirestorePreferencesRepository } from "@/lib/preferences/repository";
 const USER_ID = "firebase-user-123";
 const PREFERENCES = {
   targetLocation: "Seattle, WA",
+  additionalLocations: ["Portland, OR"],
+  radiusMiles: 25,
+  workArrangement: "hybrid" as const,
   minimumSalary: 125_000,
 };
 
@@ -63,8 +66,11 @@ describe("FirestorePreferencesRepository", () => {
     expect(double.userDocument.collection).toHaveBeenCalledWith("preferences");
     expect(double.preferencesCollection.doc).toHaveBeenCalledWith("job");
     expect(double.transaction.set).toHaveBeenCalledWith(double.document, {
-      schemaVersion: 1,
+      schemaVersion: 2,
       targetLocation: "Seattle, WA",
+      additionalLocations: ["Portland, OR"],
+      radiusMiles: 25,
+      workArrangement: "hybrid",
       minimumSalary: 125_000,
       salaryCurrency: "USD",
       salaryPeriod: "year",
@@ -94,6 +100,9 @@ describe("FirestorePreferencesRepository", () => {
     expect(Object.keys(double.transaction.set.mock.calls[0][1])).toEqual([
       "schemaVersion",
       "targetLocation",
+      "additionalLocations",
+      "radiusMiles",
+      "workArrangement",
       "minimumSalary",
       "salaryCurrency",
       "salaryPeriod",
@@ -108,7 +117,7 @@ describe("FirestorePreferencesRepository", () => {
       exists: true,
       data: () => ({
         ...PREFERENCES,
-        schemaVersion: 1,
+        schemaVersion: 2,
         salaryCurrency: "USD",
         salaryPeriod: "year",
         futureAiProfile: { skills: ["private"] },
@@ -119,6 +128,29 @@ describe("FirestorePreferencesRepository", () => {
     );
 
     await expect(repository.get(USER_ID)).resolves.toEqual(PREFERENCES);
+  });
+
+  it("loads legacy preference documents with the new defaults", async () => {
+    const double = createFirestoreDouble({ exists: false });
+    double.document.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        schemaVersion: 1,
+        targetLocation: "Remote",
+        minimumSalary: 100_000,
+      }),
+    });
+    const repository = new FirestorePreferencesRepository(
+      () => double.firestore as never,
+    );
+
+    await expect(repository.get(USER_ID)).resolves.toEqual({
+      targetLocation: "Remote",
+      additionalLocations: [],
+      radiusMiles: 25,
+      workArrangement: "remote",
+      minimumSalary: 100_000,
+    });
   });
 
   it("returns null when the scoped preference document does not exist", async () => {

@@ -17,6 +17,9 @@ const PROFILE: ResumeProfile = {
   searchKeywords: ["platform engineering", "cloud infrastructure"],
   preferences: {
     targetLocation: "Seattle, WA",
+    additionalLocations: [],
+    radiusMiles: 25,
+    workArrangement: "any",
     minimumSalary: 145_000,
   },
 };
@@ -35,6 +38,7 @@ function candidate(
     postedAt: "2 days ago",
     employmentType: "FULLTIME",
     isRemote: false,
+    workArrangement: "unknown",
     matchedSkills: [],
     description: "Build TypeScript distributed systems on Kubernetes.",
     minimumSalary: 160_000,
@@ -128,7 +132,13 @@ describe("rankJobCandidates", () => {
       recentJobTitles: ["Product Manager"],
       targetRoles: ["Senior Product Manager"],
       searchKeywords: ["product strategy"],
-      preferences: { targetLocation: "Remote", minimumSalary: 180_000 },
+      preferences: {
+        targetLocation: "Remote",
+        additionalLocations: [],
+        radiusMiles: 25,
+        workArrangement: "remote",
+        minimumSalary: 180_000,
+      },
     };
     const imperfect = candidate("imperfect", {
       title: "Product Owner",

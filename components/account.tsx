@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PreferenceIdentity } from "@/components/job-preferences";
 import type { ResumeProfile } from "@/lib/analysis/types";
 import type { JobPreferences } from "@/lib/preferences/types";
+import { parseJobPreferences } from "@/lib/preferences/validation";
 import { readGuestSession } from "@/lib/session/guest-session";
 
 type AccountProps = {
@@ -49,18 +50,11 @@ function parsePreferencesResponse(body: unknown): JobPreferences | null | undefi
   if (data.preferences === null) return null;
   if (typeof data.preferences !== "object") return undefined;
 
-  const preferences = data.preferences as Record<string, unknown>;
-  if (
-    typeof preferences.targetLocation !== "string" ||
-    typeof preferences.minimumSalary !== "number"
-  ) {
+  try {
+    return parseJobPreferences(data.preferences);
+  } catch {
     return undefined;
   }
-
-  return {
-    targetLocation: preferences.targetLocation,
-    minimumSalary: preferences.minimumSalary,
-  };
 }
 
 async function responseMessage(response: Response, fallback: string) {
@@ -112,11 +106,28 @@ function PreferencesSummary({
     return <p className="account-empty">{emptyMessage}</p>;
   }
 
+  const arrangementLabels = {
+    any: "Any",
+    remote: "Remote",
+    hybrid: "Hybrid",
+    in_person: "In person",
+  } as const;
+
   return (
     <dl className="account-facts">
       <div>
-        <dt>Preferred location</dt>
-        <dd>{preferences.targetLocation}</dd>
+        <dt>Preferred locations</dt>
+        <dd>
+          {[preferences.targetLocation, ...preferences.additionalLocations].join(", ")}
+        </dd>
+      </div>
+      <div>
+        <dt>Search radius</dt>
+        <dd>{preferences.radiusMiles} miles</dd>
+      </div>
+      <div>
+        <dt>Type of job</dt>
+        <dd>{arrangementLabels[preferences.workArrangement]}</dd>
       </div>
       <div>
         <dt>Minimum salary</dt>
@@ -312,7 +323,9 @@ export function Account({
         <section className="account-card" aria-labelledby="account-profile-heading">
           <div className="account-section-heading">
             <div>
-              <p className="step-label">Current session</p>
+              <p className="step-label">
+                {identity.kind === "user" ? "Saved to your account" : "Current session"}
+              </p>
               <h2 id="account-profile-heading">AI candidate profile</h2>
             </div>
           </div>
@@ -333,13 +346,15 @@ export function Account({
             </>
           ) : (
             <p className="account-empty">
-              No AI candidate profile in this session yet. Complete resume analysis
-              to see a summary here.
+              {identity.kind === "user"
+                ? "No saved AI candidate profile yet. Complete resume analysis to save one here."
+                : "No AI candidate profile in this session yet. Complete resume analysis to see a summary here."}
             </p>
           )}
           <p className="account-storage-note">
-            AI candidate profiles remain in memory for the current page session and
-            are not persisted to Firestore.
+            {identity.kind === "user"
+              ? "The latest AI candidate profile and extracted resume text are stored in your Firestore account. The original resume file is not stored."
+              : "AI candidate profiles remain in memory for the current page session and are not persisted to Firestore."}
           </p>
         </section>
       </div>
@@ -354,7 +369,7 @@ export function Account({
           </h2>
           <p>
             {identity.kind === "user"
-              ? "Signing out ends your authenticated ResumeMatch session. Your saved job preferences remain in your account."
+              ? "Signing out ends your authenticated ResumeMatch session. Your saved resume, latest AI profile, and job preferences remain in your account."
               : "Sign in with Google to save job preferences across visits. Your current guest data stays session-only."}
           </p>
         </div>

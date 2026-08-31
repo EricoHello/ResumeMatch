@@ -12,7 +12,18 @@ import {
   readGuestSession,
   saveGuestPreferences,
 } from "@/lib/session/guest-session";
-import type { JobPreferences as JobPreferencesValue } from "@/lib/preferences/types";
+import {
+  WORK_ARRANGEMENTS,
+  type JobPreferences as JobPreferencesValue,
+  type WorkArrangement,
+} from "@/lib/preferences/types";
+import {
+  DEFAULT_RADIUS_MILES,
+  MAX_ADDITIONAL_LOCATIONS,
+  MAX_RADIUS_MILES,
+  MIN_RADIUS_MILES,
+  parseJobPreferences,
+} from "@/lib/preferences/validation";
 
 export type PreferenceIdentity =
   | { kind: "guest" }
@@ -32,6 +43,12 @@ function samePreferences(
 ) {
   return (
     first?.targetLocation === second.targetLocation &&
+    first.radiusMiles === second.radiusMiles &&
+    first.workArrangement === second.workArrangement &&
+    first.additionalLocations.length === second.additionalLocations.length &&
+    first.additionalLocations.every(
+      (location, index) => location === second.additionalLocations[index],
+    ) &&
     first.minimumSalary === second.minimumSalary
   );
 }
@@ -51,18 +68,11 @@ function parsePreferencesResponse(
   if (data.preferences === null) return null;
   if (typeof data.preferences !== "object") return undefined;
 
-  const preferences = data.preferences as Record<string, unknown>;
-  if (
-    typeof preferences.targetLocation !== "string" ||
-    typeof preferences.minimumSalary !== "number"
-  ) {
+  try {
+    return parseJobPreferences(data.preferences);
+  } catch {
     return undefined;
   }
-
-  return {
-    targetLocation: preferences.targetLocation,
-    minimumSalary: preferences.minimumSalary,
-  };
 }
 
 async function responseMessage(response: Response, fallback: string) {
@@ -96,6 +106,15 @@ export function JobPreferences({
     identity.kind === "guest" ? readGuestSession()?.preferences ?? null : null;
   const [targetLocation, setTargetLocation] = useState(
     guestPreferences?.targetLocation ?? "",
+  );
+  const [additionalLocations, setAdditionalLocations] = useState<string[]>(
+    guestPreferences?.additionalLocations ?? [],
+  );
+  const [radiusMiles, setRadiusMiles] = useState(
+    guestPreferences?.radiusMiles ?? DEFAULT_RADIUS_MILES,
+  );
+  const [workArrangement, setWorkArrangement] = useState<WorkArrangement>(
+    guestPreferences?.workArrangement ?? "any",
   );
   const [minimumSalary, setMinimumSalary] = useState(
     guestPreferences ? String(guestPreferences.minimumSalary) : "",
@@ -152,6 +171,9 @@ export function JobPreferences({
       setLastSaved(preferences);
       if (preferences && !dirtyRef.current) {
         setTargetLocation(preferences.targetLocation);
+        setAdditionalLocations(preferences.additionalLocations);
+        setRadiusMiles(preferences.radiusMiles);
+        setWorkArrangement(preferences.workArrangement);
         setMinimumSalary(String(preferences.minimumSalary));
       }
       setLoadState("ready");
@@ -195,11 +217,32 @@ export function JobPreferences({
     event.preventDefault();
 
     const normalizedLocation = targetLocation.trim();
+    const normalizedAdditionalLocations = additionalLocations
+      .map((location) => location.trim())
+      .filter(Boolean);
     const normalizedSalary = Number(minimumSalary);
 
     if (!normalizedLocation || normalizedLocation.length > 120) {
       setSaveState("error");
       setMessage("Enter a target city or location using 120 characters or fewer.");
+      return;
+    }
+
+    if (
+      normalizedAdditionalLocations.some((location) => location.length > 120)
+    ) {
+      setSaveState("error");
+      setMessage("Each additional city must use 120 characters or fewer.");
+      return;
+    }
+
+    const normalizedCities = [
+      normalizedLocation,
+      ...normalizedAdditionalLocations,
+    ].map((location) => location.toLocaleLowerCase());
+    if (new Set(normalizedCities).size !== normalizedCities.length) {
+      setSaveState("error");
+      setMessage("Choose a different city for each preferred location.");
       return;
     }
 
@@ -216,10 +259,14 @@ export function JobPreferences({
 
     const preferences: JobPreferencesValue = {
       targetLocation: normalizedLocation,
+      additionalLocations: normalizedAdditionalLocations,
+      radiusMiles,
+      workArrangement,
       minimumSalary: normalizedSalary,
     };
 
     setTargetLocation(preferences.targetLocation);
+    setAdditionalLocations(preferences.additionalLocations);
     setMinimumSalary(String(preferences.minimumSalary));
     setMessage(null);
 
@@ -275,6 +322,9 @@ export function JobPreferences({
       if (controller.signal.aborted) return;
       dirtyRef.current = false;
       setTargetLocation(savedPreferences.targetLocation);
+      setAdditionalLocations(savedPreferences.additionalLocations);
+      setRadiusMiles(savedPreferences.radiusMiles);
+      setWorkArrangement(savedPreferences.workArrangement);
       setMinimumSalary(String(savedPreferences.minimumSalary));
       setLastSaved(savedPreferences);
       setSaveState("idle");
@@ -293,6 +343,22 @@ export function JobPreferences({
   };
 
   const fieldsDisabled = loadState === "loading" || saveState === "saving";
+  const currentPreferences =
+    targetLocation.trim() && minimumSalary.trim() !== ""
+      ? {
+          targetLocation: targetLocation.trim(),
+          additionalLocations: additionalLocations
+            .map((location) => location.trim())
+            .filter(Boolean),
+          radiusMiles,
+          workArrangement,
+          minimumSalary: Number(minimumSalary),
+        }
+      : null;
+  const usingSavedPreferences =
+    currentPreferences !== null &&
+    Number.isInteger(currentPreferences.minimumSalary) &&
+    samePreferences(lastSaved, currentPreferences);
 
   return (
     <section className="preferences-card" aria-labelledby="preferences-heading">
@@ -303,7 +369,7 @@ export function JobPreferences({
             Job preferences
           </h2>
         </div>
-        <span className="format-badge">2 questions</span>
+        <span className="format-badge">4 filters</span>
       </div>
 
       <p className="preference-intro">
@@ -350,7 +416,7 @@ export function JobPreferences({
             name="targetLocation"
             autoComplete="address-level2"
             maxLength={120}
-            placeholder="For example, Seattle or Remote"
+            placeholder="For example, Seattle, WA"
             value={targetLocation}
             disabled={fieldsDisabled}
             required
@@ -360,6 +426,124 @@ export function JobPreferences({
             }}
           />
         </div>
+
+        {targetLocation.trim() && !/^remote$/i.test(targetLocation.trim()) && (
+          <div className="field preference-wide-field radius-field">
+            <div className="range-heading">
+              <label htmlFor="location-radius">Search radius</label>
+              <output htmlFor="location-radius">{radiusMiles} mi</output>
+            </div>
+            <input
+              id="location-radius"
+              type="range"
+              name="radiusMiles"
+              min={MIN_RADIUS_MILES}
+              max={MAX_RADIUS_MILES}
+              step={5}
+              value={radiusMiles}
+              disabled={fieldsDisabled}
+              aria-describedby="location-radius-help"
+              onChange={(event) => {
+                setRadiusMiles(Number(event.target.value));
+                markChanged();
+              }}
+            />
+            <small id="location-radius-help" className="field-help">
+              Look within {radiusMiles} miles of each selected city.
+            </small>
+          </div>
+        )}
+
+        <div className="field preference-wide-field additional-location-field">
+          <div className="additional-location-heading">
+            <div>
+              <span className="field-label">Additional cities</span>
+              <small className="field-help">Optional — add up to {MAX_ADDITIONAL_LOCATIONS}.</small>
+            </div>
+            {additionalLocations.length < MAX_ADDITIONAL_LOCATIONS && (
+              <button
+                className="secondary-button compact-button"
+                type="button"
+                disabled={fieldsDisabled}
+                onClick={() => {
+                  setAdditionalLocations((locations) => [...locations, ""]);
+                  markChanged();
+                }}
+              >
+                + Add another city
+              </button>
+            )}
+          </div>
+          {additionalLocations.map((location, index) => (
+            <div className="additional-location-row" key={index}>
+              <label className="sr-only" htmlFor={`additional-location-${index}`}>
+                Additional city {index + 1}
+              </label>
+              <input
+                id={`additional-location-${index}`}
+                type="text"
+                autoComplete="address-level2"
+                maxLength={120}
+                placeholder="For example, Portland, OR"
+                value={location}
+                disabled={fieldsDisabled}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setAdditionalLocations((locations) =>
+                    locations.map((item, itemIndex) =>
+                      itemIndex === index ? value : item,
+                    ),
+                  );
+                  markChanged();
+                }}
+              />
+              <button
+                className="remove-location-button"
+                type="button"
+                disabled={fieldsDisabled}
+                aria-label={`Remove additional city ${index + 1}`}
+                onClick={() => {
+                  setAdditionalLocations((locations) =>
+                    locations.filter((_, itemIndex) => itemIndex !== index),
+                  );
+                  markChanged();
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <fieldset className="field preference-wide-field work-arrangement-field">
+          <legend>Type of job</legend>
+          <div className="work-arrangement-options">
+            {WORK_ARRANGEMENTS.map((option) => {
+              const labels: Record<WorkArrangement, string> = {
+                any: "Any",
+                remote: "Remote",
+                hybrid: "Hybrid",
+                in_person: "In person",
+              };
+              return (
+                <label key={option}>
+                  <input
+                    type="radio"
+                    name="workArrangement"
+                    value={option}
+                    checked={workArrangement === option}
+                    disabled={fieldsDisabled}
+                    onChange={() => {
+                      setWorkArrangement(option);
+                      markChanged();
+                    }}
+                  />
+                  <span>{labels[option]}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
 
         <div className="field">
           <label htmlFor="minimum-salary">Minimum acceptable salary</label>
@@ -395,8 +579,11 @@ export function JobPreferences({
 
         <p className="analysis-consent-note">
           Continuing sends your extracted resume text and preferences to Gemini for
-          AI analysis. ResumeMatch does not persist the resume text or generated
-          profile. Google states that free-tier submitted content may be used to
+          AI analysis.{" "}
+          {identity.kind === "user"
+            ? "The extracted text and latest generated profile are saved to your account; the original file is not stored. "
+            : "ResumeMatch does not persist the resume text or generated profile for guests. "}
+          Google states that free-tier submitted content may be used to
           improve its products; review the{" "}
           <a
             href="https://ai.google.dev/gemini-api/docs/pricing"
@@ -418,10 +605,7 @@ export function JobPreferences({
             {saveState === "saving"
               ? "Saving…"
               : identity.kind === "user"
-                ? lastSaved &&
-                  targetLocation.trim() === lastSaved.targetLocation &&
-                  minimumSalary.trim() !== "" &&
-                  Number(minimumSalary) === lastSaved.minimumSalary
+                ? usingSavedPreferences
                   ? "Continue with saved preferences"
                   : lastSaved
                     ? "Save changes"

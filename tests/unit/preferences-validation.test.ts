@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_RADIUS_MILES,
+  MAX_ADDITIONAL_LOCATIONS,
   MAX_MINIMUM_SALARY,
+  MAX_RADIUS_MILES,
   MAX_TARGET_LOCATION_LENGTH,
+  MIN_RADIUS_MILES,
   parseJobPreferences,
   PreferencesValidationError,
 } from "@/lib/preferences/validation";
@@ -12,10 +16,16 @@ describe("parseJobPreferences", () => {
     expect(
       parseJobPreferences({
         targetLocation: "  San Francisco, CA  ",
+        additionalLocations: ["  Oakland, CA  "],
+        radiusMiles: 50,
+        workArrangement: "hybrid",
         minimumSalary: 150_000,
       }),
     ).toEqual({
       targetLocation: "San Francisco, CA",
+      additionalLocations: ["Oakland, CA"],
+      radiusMiles: 50,
+      workArrangement: "hybrid",
       minimumSalary: 150_000,
     });
   });
@@ -71,10 +81,16 @@ describe("parseJobPreferences", () => {
     ).toThrow(PreferencesValidationError);
   });
 
-  it("accepts boundary values", () => {
+  it("migrates legacy preferences with safe defaults", () => {
     expect(
       parseJobPreferences({ targetLocation: "x", minimumSalary: 0 }),
-    ).toEqual({ targetLocation: "x", minimumSalary: 0 });
+    ).toEqual({
+      targetLocation: "x",
+      additionalLocations: [],
+      radiusMiles: DEFAULT_RADIUS_MILES,
+      workArrangement: "any",
+      minimumSalary: 0,
+    });
 
     const targetLocation = "x".repeat(MAX_TARGET_LOCATION_LENGTH);
 
@@ -83,6 +99,33 @@ describe("parseJobPreferences", () => {
         targetLocation,
         minimumSalary: MAX_MINIMUM_SALARY,
       }),
-    ).toEqual({ targetLocation, minimumSalary: MAX_MINIMUM_SALARY });
+    ).toEqual({
+      targetLocation,
+      additionalLocations: [],
+      radiusMiles: DEFAULT_RADIUS_MILES,
+      workArrangement: "any",
+      minimumSalary: MAX_MINIMUM_SALARY,
+    });
+  });
+
+  it.each([
+    { additionalLocations: ["Portland", "Portland"] },
+    { additionalLocations: ["Seattle"] },
+    { additionalLocations: Array(MAX_ADDITIONAL_LOCATIONS + 1).fill("City") },
+    { radiusMiles: MIN_RADIUS_MILES - 1 },
+    { radiusMiles: MAX_RADIUS_MILES + 1 },
+    { radiusMiles: 25.5 },
+    { workArrangement: "sometimes" },
+  ])("rejects invalid expanded filters: %j", (override) => {
+    expect(() =>
+      parseJobPreferences({
+        targetLocation: "Seattle",
+        additionalLocations: [],
+        radiusMiles: DEFAULT_RADIUS_MILES,
+        workArrangement: "any",
+        minimumSalary: 100_000,
+        ...override,
+      }),
+    ).toThrow(PreferencesValidationError);
   });
 });

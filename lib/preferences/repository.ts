@@ -10,7 +10,7 @@ import { parseJobPreferences } from "./validation";
 const PREFERENCES_DOCUMENT = "job";
 
 type StoredJobPreferences = JobPreferences & {
-  schemaVersion: 1;
+  schemaVersion: 2;
   salaryCurrency: "USD";
   salaryPeriod: "year";
   createdAt: Timestamp;
@@ -36,10 +36,19 @@ export class FirestorePreferencesRepository {
 
     const data = snapshot.data();
 
-    return parseJobPreferences({
+    const basePreferences = {
       targetLocation: data?.targetLocation,
       minimumSalary: data?.minimumSalary,
-    });
+    };
+
+    return data?.schemaVersion === 2
+      ? parseJobPreferences({
+          ...basePreferences,
+          additionalLocations: data.additionalLocations,
+          radiusMiles: data.radiusMiles,
+          workArrangement: data.workArrangement,
+        })
+      : parseJobPreferences(basePreferences);
   }
 
   async save(
@@ -60,8 +69,11 @@ export class FirestorePreferencesRepository {
           ? existingCreatedAt
           : timestamp;
       const storedPreferences: StoredJobPreferences = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         targetLocation: preferences.targetLocation,
+        additionalLocations: preferences.additionalLocations,
+        radiusMiles: preferences.radiusMiles,
+        workArrangement: preferences.workArrangement,
         minimumSalary: preferences.minimumSalary,
         salaryCurrency: "USD",
         salaryPeriod: "year",

@@ -123,13 +123,26 @@ function FileIcon() {
 
 type ResumeUploaderProps = {
   onResultChange?: (result: ResumeParseResult | null) => void;
+  initialResult?: ResumeParseResult | null;
+  initialResultIsSaved?: boolean;
+  useReplaceLabel?: boolean;
 };
 
-export function ResumeUploader({ onResultChange }: ResumeUploaderProps) {
-  const [phase, setPhase] = useState<Phase>("idle");
+export function ResumeUploader({
+  onResultChange,
+  initialResult = null,
+  initialResultIsSaved = false,
+  useReplaceLabel = false,
+}: ResumeUploaderProps) {
+  const [phase, setPhase] = useState<Phase>(
+    initialResult ? "success" : "idle",
+  );
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [result, setResult] = useState<ResumeParseResult | null>(null);
+  const [result, setResult] = useState<ResumeParseResult | null>(initialResult);
+  const [showingSavedResult, setShowingSavedResult] = useState(
+    Boolean(initialResult && initialResultIsSaved),
+  );
   const [error, setError] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">(
     "idle",
@@ -144,6 +157,7 @@ export function ResumeUploader({ onResultChange }: ResumeUploaderProps) {
 
     setSelectedFile(file);
     setResult(null);
+    setShowingSavedResult(false);
     onResultChange?.(null);
     setError(null);
     setCopyState("idle");
@@ -254,6 +268,7 @@ export function ResumeUploader({ onResultChange }: ResumeUploaderProps) {
     setUploadProgress(0);
     setSelectedFile(null);
     setResult(null);
+    setShowingSavedResult(false);
     onResultChange?.(null);
     setError(null);
     setCopyState("idle");
@@ -299,7 +314,9 @@ export function ResumeUploader({ onResultChange }: ResumeUploaderProps) {
           ? `Uploading… ${uploadProgress}%`
           : "Extracting resume text…"
         : phase === "success"
-          ? "Upload another resume"
+          ? showingSavedResult
+            ? "Upload new resume"
+            : "Upload another resume"
           : "Drop your resume here";
 
   return (
@@ -307,9 +324,13 @@ export function ResumeUploader({ onResultChange }: ResumeUploaderProps) {
       <div className="card-heading">
         <div>
           <p className="step-label">Step 1 of 4</p>
-          <h2 id="uploader-heading" tabIndex={-1}>Upload your resume</h2>
+          <h2 id="uploader-heading" tabIndex={-1}>
+            {showingSavedResult ? "Your saved resume" : "Upload your resume"}
+          </h2>
         </div>
-        <span className="format-badge">PDF · DOCX</span>
+        <span className="format-badge">
+          {showingSavedResult ? "Saved" : "PDF · DOCX"}
+        </span>
       </div>
 
       <div
@@ -355,7 +376,10 @@ export function ResumeUploader({ onResultChange }: ResumeUploaderProps) {
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {phase === "uploading" && `Uploading ${uploadProgress} percent.`}
         {phase === "parsing" && "Upload complete. Extracting resume text."}
-        {phase === "success" && "Resume text extracted successfully."}
+        {phase === "success" &&
+          (showingSavedResult
+            ? "Saved resume loaded successfully."
+            : "Resume text extracted successfully.")}
       </div>
 
       {selectedFile && (
@@ -406,9 +430,12 @@ export function ResumeUploader({ onResultChange }: ResumeUploaderProps) {
           <div className="result-heading">
             <div>
               <p className="success-label">
-                <span aria-hidden="true">✓</span> Extraction complete
+                <span aria-hidden="true">✓</span>{" "}
+                {showingSavedResult ? "Loaded from your account" : "Extraction complete"}
               </p>
-              <h2 id="result-heading">Extracted resume text</h2>
+              <h2 id="result-heading">
+                {showingSavedResult ? "Saved resume text" : "Extracted resume text"}
+              </h2>
             </div>
             <div className="result-actions">
               <button className="secondary-button" type="button" onClick={copyText}>
@@ -419,15 +446,19 @@ export function ResumeUploader({ onResultChange }: ResumeUploaderProps) {
                     : "Copy text"}
               </button>
               <button className="secondary-button" type="button" onClick={reset}>
-                Start over
+                {useReplaceLabel ? "Replace resume" : "Start over"}
               </button>
             </div>
           </div>
 
           <div className="result-meta" aria-label="Extraction details">
-            <span>{result.fileType.toUpperCase()}</span>
+            <span>
+              {showingSavedResult ? "Saved to your account" : result.fileType.toUpperCase()}
+            </span>
             <span>{result.characterCount.toLocaleString()} characters</span>
-            <span title={result.fileName}>{result.fileName}</span>
+            {!showingSavedResult && (
+              <span title={result.fileName}>{result.fileName}</span>
+            )}
           </div>
 
           {result.warnings && result.warnings.length > 0 && (

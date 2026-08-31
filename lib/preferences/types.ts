@@ -1,5 +1,17 @@
+export const WORK_ARRANGEMENTS = [
+  "any",
+  "remote",
+  "hybrid",
+  "in_person",
+] as const;
+
+export type WorkArrangement = (typeof WORK_ARRANGEMENTS)[number];
+
 export type JobPreferences = {
   targetLocation: string;
+  additionalLocations: string[];
+  radiusMiles: number;
+  workArrangement: WorkArrangement;
   minimumSalary: number;
 };
 

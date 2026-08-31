@@ -58,6 +58,9 @@ const JOB_MATCHES = [
 
 type AnalysisPreferences = {
   targetLocation: string;
+  additionalLocations: string[];
+  radiusMiles: number;
+  workArrangement: "any" | "remote" | "hybrid" | "in_person";
   minimumSalary: number;
 };
 
@@ -149,6 +152,18 @@ function watchPreferenceRequests(page: Page) {
 
   page.on("request", (request) => {
     if (new URL(request.url()).pathname === "/api/preferences") {
+      requests.push(request);
+    }
+  });
+
+  return requests;
+}
+
+function watchSavedResumeRequests(page: Page) {
+  const requests: Request[] = [];
+
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/resumes/saved") {
       requests.push(request);
     }
   });
@@ -261,6 +276,9 @@ test("completes analysis and one live search for three guest job matches", async
   const jobSearch = await mockDeferredJobSearch(page);
   const analysis = await mockDeferredAnalysis(page, {
     targetLocation: "Seattle, WA",
+    additionalLocations: ["Portland, OR"],
+    radiusMiles: 50,
+    workArrangement: "hybrid",
     minimumSalary: 145000,
   });
 
@@ -276,6 +294,14 @@ test("completes analysis and one live search for three guest job matches", async
   await expect(page.getByText("Annual salary in USD.")).toBeVisible();
 
   await page.getByLabel("Target city or location").fill("Seattle, WA");
+  await page.getByRole("button", { name: /add another city/i }).click();
+  await page
+    .getByRole("textbox", { name: "Additional city 1", exact: true })
+    .fill("Portland, OR");
+  for (let step = 0; step < 5; step += 1) {
+    await page.getByLabel("Search radius").press("ArrowRight");
+  }
+  await page.getByRole("radio", { name: "Hybrid" }).check();
   await page.getByLabel("Minimum acceptable salary").fill("145000");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
 
@@ -312,7 +338,9 @@ test("completes analysis and one live search for three guest job matches", async
   ).toBeVisible();
   await expect(page.getByText(PROFILE_DETAILS.summary)).toBeVisible();
   await expect(page.getByText("Senior", { exact: true })).toBeVisible();
-  await expect(page.getByText("Seattle, WA", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Seattle, WA, Portland, OR · 50 mi radius", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByText("$145,000 / year", { exact: true })).toBeVisible();
   await expect(page.getByRole("list", { name: "Skills" })).toContainText(
     "TypeScript",
@@ -325,6 +353,9 @@ test("completes analysis and one live search for three guest job matches", async
     resumeText: expect.stringContaining(PDF_RESUME_TEXT.name),
     preferences: {
       targetLocation: "Seattle, WA",
+      additionalLocations: ["Portland, OR"],
+      radiusMiles: 50,
+      workArrangement: "hybrid",
       minimumSalary: 145000,
     },
   });
@@ -368,6 +399,9 @@ test("completes analysis and one live search for three guest job matches", async
   expect(jobSearch.requests[0].postDataJSON()).toEqual({
     profile: analysisProfile({
       targetLocation: "Seattle, WA",
+      additionalLocations: ["Portland, OR"],
+      radiusMiles: 50,
+      workArrangement: "hybrid",
       minimumSalary: 145000,
     }),
   });
@@ -453,6 +487,9 @@ test("shows a safe analysis error and retries the request", async ({ page }) => 
       body: JSON.stringify({
         profile: analysisProfile({
           targetLocation: "Remote",
+          additionalLocations: [],
+          radiusMiles: 25,
+          workArrangement: "any",
           minimumSalary: 125000,
         }),
       }),
@@ -498,6 +535,7 @@ test("restores guest preferences after a reload without persisting them to Fires
   page,
 }) => {
   const preferenceRequests = watchPreferenceRequests(page);
+  const savedResumeRequests = watchSavedResumeRequests(page);
   const analysisRequests = await mockSuccessfulAnalysis(page);
 
   await enterGuestMode(page);
@@ -538,4 +576,5 @@ test("restores guest preferences after a reload without persisting them to Fires
   ).toBeVisible();
   await expect.poll(() => analysisRequests.length).toBe(2);
   expect(preferenceRequests).toHaveLength(0);
+  expect(savedResumeRequests).toHaveLength(0);
 });

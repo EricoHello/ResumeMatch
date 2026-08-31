@@ -30,7 +30,13 @@ const PROFILE = {
   recentJobTitles: ["Senior Software Engineer"],
   targetRoles: ["Staff Software Engineer"],
   searchKeywords: ["platform engineering"],
-  preferences: { targetLocation: "Seattle, WA", minimumSalary: 145_000 },
+  preferences: {
+    targetLocation: "Seattle, WA",
+    additionalLocations: [],
+    radiusMiles: 25,
+    workArrangement: "any" as const,
+    minimumSalary: 145_000,
+  },
 };
 const JOBS = [
   {

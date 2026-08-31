@@ -27,8 +27,11 @@ let testEnvironment: RulesTestEnvironment;
 
 function jobPreferences(overrides: Record<string, unknown> = {}) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     targetLocation: "San Francisco, CA",
+    additionalLocations: [],
+    radiusMiles: 25,
+    workArrangement: "any",
     minimumSalary: 125_000,
     salaryCurrency: "USD",
     salaryPeriod: "year",
@@ -44,8 +47,11 @@ async function seedJobPreferences(
 ) {
   const createdAt = Timestamp.fromMillis(1_750_000_000_000);
   const data = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     targetLocation: "San Francisco, CA",
+    additionalLocations: [],
+    radiusMiles: 25,
+    workArrangement: "any",
     minimumSalary: 125_000,
     salaryCurrency: "USD",
     salaryPeriod: "year",
@@ -168,10 +174,19 @@ describe("Firestore job-preference rules", () => {
 
   it.each([
     ["a missing required field", { updatedAt: undefined }],
-    ["an unsupported schema version", { schemaVersion: 2 }],
+    ["an unsupported schema version", { schemaVersion: 1 }],
     ["a non-string location", { targetLocation: 123 }],
     ["an empty location", { targetLocation: "" }],
     ["a location over 120 characters", { targetLocation: "x".repeat(121) }],
+    ["a non-list additional location", { additionalLocations: "Seattle" }],
+    ["too many additional locations", { additionalLocations: ["a", "b", "c", "d"] }],
+    ["an empty additional location", { additionalLocations: [""] }],
+    ["a duplicate primary location", { additionalLocations: ["San Francisco, CA"] }],
+    ["duplicate additional locations", { additionalLocations: ["Oakland", "Oakland"] }],
+    ["a radius below the minimum", { radiusMiles: 4 }],
+    ["a radius above the maximum", { radiusMiles: 101 }],
+    ["a non-integer radius", { radiusMiles: 25.5 }],
+    ["an unsupported job type", { workArrangement: "sometimes" }],
     ["a non-integer salary", { minimumSalary: 100_000.5 }],
     ["a negative salary", { minimumSalary: -1 }],
     ["a salary over the upper bound", { minimumSalary: 10_000_001 }],

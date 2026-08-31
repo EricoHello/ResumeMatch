@@ -59,6 +59,36 @@ function overlapRatio(left: Set<string>, right: Set<string>) {
   return left.size === 0 ? 0 : overlapCount(left, right) / left.size;
 }
 
+function preferredLocations(preferences: JobPreferences) {
+  return [preferences.targetLocation, ...preferences.additionalLocations];
+}
+
+function locationScore(candidate: JobCandidate, preferences: JobPreferences) {
+  const actualLocation = normalizedText(candidate.location);
+  return Math.max(
+    0,
+    ...preferredLocations(preferences).map((location) => {
+      const desiredLocation = normalizedText(location);
+      if (desiredLocation && actualLocation.includes(desiredLocation)) return 40;
+      return overlapRatio(tokens(location), tokens(candidate.location)) * 24;
+    }),
+  );
+}
+
+function workArrangementScore(
+  candidate: JobCandidate,
+  preference: JobPreferences["workArrangement"],
+) {
+  if (preference === "any") return candidate.isRemote ? 8 : 0;
+  if (preference === "remote") return candidate.isRemote ? 34 : -24;
+  if (candidate.workArrangement === "unknown") return 0;
+  if (preference === "hybrid") {
+    return candidate.workArrangement === "hybrid" ? 30 : -18;
+  }
+  if (candidate.workArrangement === "in_person") return 26;
+  return candidate.workArrangement === "hybrid" ? -8 : -20;
+}
+
 function annualSalary(candidate: JobCandidate) {
   const multiplier: Record<string, number> = {
     hour: 2_080,
@@ -174,19 +204,11 @@ function scoreCandidate(
   ).slice(0, 4);
   score += Math.min(24, matchedSkills.length * 6);
 
-  const desiredLocation = normalizedText(profile.preferences.targetLocation);
-  const actualLocation = normalizedText(candidate.location);
-  const wantsRemote = /\bremote\b/i.test(profile.preferences.targetLocation);
-  if (wantsRemote && candidate.isRemote) score += 34;
-  else if (actualLocation.includes(desiredLocation)) score += 32;
-  else {
-    score +=
-      overlapRatio(
-        tokens(profile.preferences.targetLocation),
-        tokens(candidate.location),
-      ) * 24;
-    if (candidate.isRemote) score += 8;
-  }
+  score += locationScore(candidate, profile.preferences);
+  score += workArrangementScore(
+    candidate,
+    profile.preferences.workArrangement,
+  );
 
   const salary = annualSalary(candidate);
   const minimumDesired = profile.preferences.minimumSalary;
@@ -283,29 +305,10 @@ export function rankJobCandidatesByPreferencesWithDiagnostics(
   now = Date.now(),
 ): JobRankingResult {
   const seen = new Set<string>();
-  const desiredLocation = normalizedText(preferences.targetLocation);
-  const desiredLocationTokens = tokens(preferences.targetLocation);
-  const wantsRemote = /\bremote\b/i.test(preferences.targetLocation);
   const available = candidates
     .map((candidate, index) => {
-      const actualLocation = normalizedText(candidate.location);
-      let score = 0;
-
-      if (
-        wantsRemote &&
-        (candidate.isRemote || actualLocation.includes("remote"))
-      ) {
-        score += 40;
-      } else if (
-        desiredLocation &&
-        actualLocation.includes(desiredLocation)
-      ) {
-        score += 40;
-      } else {
-        score +=
-          overlapRatio(desiredLocationTokens, tokens(candidate.location)) * 24;
-        if (candidate.isRemote) score += 8;
-      }
+      let score = locationScore(candidate, preferences);
+      score += workArrangementScore(candidate, preferences.workArrangement);
 
       const salary = annualSalary(candidate);
       if (

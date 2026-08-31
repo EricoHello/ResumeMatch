@@ -14,6 +14,9 @@ import {
 
 const SAVED_PREFERENCES = {
   targetLocation: "Seattle, WA",
+  additionalLocations: [],
+  radiusMiles: 25,
+  workArrangement: "any" as const,
   minimumSalary: 120_000,
 };
 
@@ -110,7 +113,13 @@ describe("Account", () => {
 
   it("shows guest status, session preferences, and Google Sign-In without Firestore access", async () => {
     beginGuestSession();
-    saveGuestPreferences({ targetLocation: "Remote", minimumSalary: 95_000 });
+    saveGuestPreferences({
+      targetLocation: "Remote",
+      additionalLocations: [],
+      radiusMiles: 25,
+      workArrangement: "remote",
+      minimumSalary: 95_000,
+    });
     const onGoogleSignIn = vi.fn();
 
     render(
@@ -130,7 +139,7 @@ describe("Account", () => {
     expect(screen.getByText("Guest status")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Guest session" })).toBeTruthy();
     expect(screen.getByText(/stored only for this browser-tab session/i)).toBeTruthy();
-    expect(screen.getByText("Remote")).toBeTruthy();
+    expect(screen.getAllByText("Remote")).toHaveLength(2);
     expect(screen.getByText("$95,000 / year")).toBeTruthy();
     expect(fetch).not.toHaveBeenCalled();
 

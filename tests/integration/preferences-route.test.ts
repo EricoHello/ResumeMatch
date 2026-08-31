@@ -30,6 +30,9 @@ import { GET, PUT } from "@/app/api/preferences/route";
 const VERIFIED_UID = "verified-firebase-user";
 const PREFERENCES = {
   targetLocation: "Austin, TX",
+  additionalLocations: [],
+  radiusMiles: 25,
+  workArrangement: "any",
   minimumSalary: 110_000,
 };
 
@@ -158,6 +161,9 @@ describe("PUT /api/preferences", () => {
         contentType: "application/json; charset=utf-8",
         body: JSON.stringify({
           targetLocation: "  Austin, TX  ",
+          additionalLocations: [],
+          radiusMiles: 25,
+          workArrangement: "any",
           minimumSalary: 110_000,
         }),
       }),

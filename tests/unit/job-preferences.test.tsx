@@ -15,6 +15,9 @@ import { clearGuestSession } from "@/lib/session/guest-session";
 
 const SAVED_PREFERENCES = {
   targetLocation: "Seattle, WA",
+  additionalLocations: [],
+  radiusMiles: 25,
+  workArrangement: "any" as const,
   minimumSalary: 120_000,
 };
 
@@ -102,6 +105,9 @@ describe("JobPreferences", () => {
     const fetchMock = vi.mocked(fetch);
     const updatedPreferences = {
       ...SAVED_PREFERENCES,
+      additionalLocations: ["Portland, OR"],
+      radiusMiles: 50,
+      workArrangement: "hybrid" as const,
       minimumSalary: 135_000,
     };
     fetchMock
@@ -120,6 +126,14 @@ describe("JobPreferences", () => {
     );
 
     const salary = await screen.findByDisplayValue("120000");
+    fireEvent.click(screen.getByRole("button", { name: /add another city/i }));
+    fireEvent.change(screen.getByLabelText("Additional city 1"), {
+      target: { value: "Portland, OR" },
+    });
+    fireEvent.change(screen.getByLabelText("Search radius"), {
+      target: { value: "50" },
+    });
+    fireEvent.click(screen.getByRole("radio", { name: "Hybrid" }));
     fireEvent.change(salary, { target: { value: "135000" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
@@ -165,6 +179,9 @@ describe("JobPreferences", () => {
     await waitFor(() =>
       expect(onReadyChange).toHaveBeenLastCalledWith({
         targetLocation: "Remote",
+        additionalLocations: [],
+        radiusMiles: 25,
+        workArrangement: "any",
         minimumSalary: 99000,
       }),
     );

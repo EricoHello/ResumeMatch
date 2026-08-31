@@ -77,7 +77,7 @@ export function parseAnalyzeResumeRequest(value: unknown): AnalyzeResumeRequest 
     };
   } catch {
     throw new AnalysisValidationError(
-      "Preferences must include a valid targetLocation and minimumSalary.",
+      "Preferences must include valid locations, radius, job type, and minimum salary.",
     );
   }
 }

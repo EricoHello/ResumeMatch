@@ -1,28 +1,16 @@
 import type { JobPreferences } from "@/lib/preferences/types";
+import { parseJobPreferences } from "@/lib/preferences/validation";
 
 export type GuestPreferences = JobPreferences;
 
 type GuestSession = {
-  version: 1;
+  version: 2;
   mode: "guest";
   preferences?: GuestPreferences;
 };
 
 const SESSION_KEY = "resumematch:guest-session:v1";
 let memorySession: GuestSession | null = null;
-
-function isPreferences(value: unknown): value is GuestPreferences {
-  if (typeof value !== "object" || value === null) return false;
-
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.targetLocation === "string" &&
-    typeof candidate.minimumSalary === "number" &&
-    Number.isInteger(candidate.minimumSalary) &&
-    candidate.minimumSalary >= 0 &&
-    candidate.minimumSalary <= 10_000_000
-  );
-}
 
 export function readGuestSession(): GuestSession | null {
   if (typeof window === "undefined") return memorySession;
@@ -35,12 +23,22 @@ export function readGuestSession(): GuestSession | null {
     if (typeof value !== "object" || value === null) return null;
 
     const candidate = value as Record<string, unknown>;
-    if (candidate.version !== 1 || candidate.mode !== "guest") return null;
-    if (candidate.preferences !== undefined && !isPreferences(candidate.preferences)) {
-      return null;
+    if ((candidate.version !== 1 && candidate.version !== 2) || candidate.mode !== "guest") return null;
+
+    let preferences: JobPreferences | undefined;
+    if (candidate.preferences !== undefined) {
+      try {
+        preferences = parseJobPreferences(candidate.preferences);
+      } catch {
+        return null;
+      }
     }
 
-    memorySession = candidate as GuestSession;
+    memorySession = {
+      version: 2,
+      mode: "guest",
+      ...(preferences ? { preferences } : {}),
+    };
     return memorySession;
   } catch {
     return memorySession;
@@ -52,7 +50,7 @@ export function beginGuestSession() {
 
   const existing = readGuestSession();
   const session: GuestSession = {
-    version: 1,
+    version: 2,
     mode: "guest",
     ...(existing?.preferences ? { preferences: existing.preferences } : {}),
   };
@@ -69,7 +67,7 @@ export function saveGuestPreferences(preferences: GuestPreferences) {
   if (typeof window === "undefined") return;
 
   const session: GuestSession = {
-    version: 1,
+    version: 2,
     mode: "guest",
     preferences,
   };

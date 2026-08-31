@@ -11,6 +11,9 @@ const PROFILE = {
   searchKeywords: ["platform engineering"],
   preferences: {
     targetLocation: "Seattle, WA",
+    additionalLocations: [],
+    radiusMiles: 25,
+    workArrangement: "any",
     minimumSalary: 145_000,
   },
 };

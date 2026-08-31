@@ -104,6 +104,19 @@ function salaryDisplay(job: Record<string, unknown>) {
   return `Up to ${formattedNumber(maximum as number, currency)} / ${period}`;
 }
 
+function candidateWorkArrangement(
+  value: unknown,
+  isRemote: boolean,
+): JobCandidate["workArrangement"] {
+  if (isRemote) return "remote";
+  const arrangement = textValue(value, 80)?.toLowerCase() ?? "";
+  if (/\bhybrid\b/.test(arrangement)) return "hybrid";
+  if (/\b(?:on[ -]?site|in[ -]?person)\b/.test(arrangement)) {
+    return "in_person";
+  }
+  return "unknown";
+}
+
 function parseCandidate(value: unknown, index: number): JobCandidate | null {
   if (!isRecord(value)) return null;
 
@@ -138,6 +151,7 @@ function parseCandidate(value: unknown, index: number): JobCandidate | null {
         ? textValue(value.job_employment_types[0], 80)
         : null),
     isRemote,
+    workArrangement: candidateWorkArrangement(value.work_arrangement, isRemote),
     matchedSkills: [],
     description: textValue(value.job_description, 12_000) ?? "",
     minimumSalary: numberValue(value.job_min_salary),
@@ -242,12 +256,32 @@ export function jSearchLocaleFor(location: string) {
 
 export function buildJSearchQuery(profile: ResumeProfile) {
   const role = broadestSupportedRole(profile);
-  const location = broaderSearchLocation(profile.preferences.targetLocation);
-  const remote = /\bremote\b/i.test(profile.preferences.targetLocation);
+  const locations = [
+    profile.preferences.targetLocation,
+    ...profile.preferences.additionalLocations,
+  ]
+    .map(broaderSearchLocation)
+    .filter((location) => !/^remote$/i.test(location));
+  const locationQuery = locations.length
+    ? `within ${profile.preferences.radiusMiles} miles of ${locations.join(" or ")}`
+    : "";
+  const arrangement = profile.preferences.workArrangement;
+  const remote =
+    arrangement === "remote" ||
+    /^remote$/i.test(profile.preferences.targetLocation.trim());
+  const arrangementQuery =
+    remote
+      ? "remote"
+      : arrangement === "hybrid"
+        ? "hybrid"
+        : arrangement === "in_person"
+          ? "on-site"
+          : "";
   return [
     role,
     "jobs",
-    remote ? "remote" : `in ${location}`,
+    arrangementQuery,
+    locationQuery,
   ]
     .filter(Boolean)
     .join(" ");
@@ -266,7 +300,7 @@ const COUNTRY_NAMES: Record<string, string> = {
 export function buildSmokeTestJSearchQuery(profile: ResumeProfile) {
   const locale = jSearchLocaleFor(profile.preferences.targetLocation);
   const location = cleanQueryPart(profile.preferences.targetLocation, 120);
-  return /\bremote\b/i.test(location)
+  return profile.preferences.workArrangement === "remote" || /\bremote\b/i.test(location)
     ? `remote jobs in ${COUNTRY_NAMES[locale.country] ?? "United States"}`
     : `jobs in ${location}`;
 }
@@ -302,6 +336,12 @@ export class JSearchClient {
     url.searchParams.set("query", query);
     url.searchParams.set("country", locale.country);
     url.searchParams.set("language", locale.language);
+    if (
+      profile.preferences.workArrangement === "remote" ||
+      /^remote$/i.test(profile.preferences.targetLocation.trim())
+    ) {
+      url.searchParams.set("work_from_home", "true");
+    }
     this.debug("smoke-test mode enabled", this.smokeTestEnabled);
     this.debug("resume matching enabled", !this.smokeTestEnabled);
     this.debug("generated JSearch query", query);

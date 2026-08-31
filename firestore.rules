@@ -10,6 +10,9 @@ service cloud.firestore {
       return data.keys().hasOnly([
         'schemaVersion',
         'targetLocation',
+        'additionalLocations',
+        'radiusMiles',
+        'workArrangement',
         'minimumSalary',
         'salaryCurrency',
         'salaryPeriod',
@@ -18,6 +21,9 @@ service cloud.firestore {
       ]) && data.keys().hasAll([
         'schemaVersion',
         'targetLocation',
+        'additionalLocations',
+        'radiusMiles',
+        'workArrangement',
         'minimumSalary',
         'salaryCurrency',
         'salaryPeriod',
@@ -28,10 +34,35 @@ service cloud.firestore {
 
     function hasValidJobPreferenceValues(data) {
       return data.schemaVersion is int
-        && data.schemaVersion == 1
+        && data.schemaVersion == 2
         && data.targetLocation is string
         && data.targetLocation.size() >= 1
         && data.targetLocation.size() <= 120
+        && data.additionalLocations is list
+        && data.additionalLocations.size() <= 3
+        && (data.additionalLocations.size() < 1
+          || (data.additionalLocations[0] is string
+            && data.additionalLocations[0].size() >= 1
+            && data.additionalLocations[0].size() <= 120
+            && data.additionalLocations[0] != data.targetLocation))
+        && (data.additionalLocations.size() < 2
+          || (data.additionalLocations[1] is string
+            && data.additionalLocations[1].size() >= 1
+            && data.additionalLocations[1].size() <= 120
+            && data.additionalLocations[1] != data.targetLocation
+            && data.additionalLocations[1] != data.additionalLocations[0]))
+        && (data.additionalLocations.size() < 3
+          || (data.additionalLocations[2] is string
+            && data.additionalLocations[2].size() >= 1
+            && data.additionalLocations[2].size() <= 120
+            && data.additionalLocations[2] != data.targetLocation
+            && data.additionalLocations[2] != data.additionalLocations[0]
+            && data.additionalLocations[2] != data.additionalLocations[1]))
+        && data.radiusMiles is int
+        && data.radiusMiles >= 5
+        && data.radiusMiles <= 100
+        && data.workArrangement is string
+        && data.workArrangement in ['any', 'remote', 'hybrid', 'in_person']
         && data.minimumSalary is int
         && data.minimumSalary >= 0
         && data.minimumSalary <= 10000000
@@ -66,7 +97,8 @@ service cloud.firestore {
       allow list, delete: if false;
     }
 
-    // Reserved for a later AI-analysis iteration. No client may access it yet.
+    // Saved resumes are server-managed through authenticated API routes.
+    // Browser clients never read or write resume text or profiles directly.
     match /users/{uid}/resumeProfiles/{document=**} {
       allow read, write: if false;
     }

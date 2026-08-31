@@ -38,6 +38,7 @@ export type SearchJobsErrorResponse = {
 };
 
 export type JobCandidate = JobMatch & {
+  workArrangement: "remote" | "hybrid" | "in_person" | "unknown";
   description: string;
   minimumSalary: number | null;
   maximumSalary: number | null;

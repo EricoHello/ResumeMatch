@@ -10,6 +10,7 @@ export type ResumeAnalysisState =
 
 type ResumeAnalysisProps = {
   state: ResumeAnalysisState;
+  persistsToAccount?: boolean;
   onRetry: () => void;
 };
 
@@ -82,7 +83,11 @@ function RetryAction({
   );
 }
 
-export function ResumeAnalysis({ state, onRetry }: ResumeAnalysisProps) {
+export function ResumeAnalysis({
+  state,
+  persistsToAccount = false,
+  onRetry,
+}: ResumeAnalysisProps) {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
 
   useEffect(() => {
@@ -166,8 +171,25 @@ export function ResumeAnalysis({ state, onRetry }: ResumeAnalysisProps) {
                 <dd>{displayExperienceLevel(state.profile.experienceLevel)}</dd>
               </div>
               <div>
-                <dt>Target location</dt>
-                <dd>{state.profile.preferences.targetLocation}</dd>
+                <dt>Target locations</dt>
+                <dd>
+                  {[
+                    state.profile.preferences.targetLocation,
+                    ...state.profile.preferences.additionalLocations,
+                  ].join(", ")}
+                  {` · ${state.profile.preferences.radiusMiles} mi radius`}
+                </dd>
+              </div>
+              <div>
+                <dt>Type of job</dt>
+                <dd>
+                  {{
+                    any: "Any",
+                    remote: "Remote",
+                    hybrid: "Hybrid",
+                    in_person: "In person",
+                  }[state.profile.preferences.workArrangement]}
+                </dd>
               </div>
               <div>
                 <dt>Minimum salary</dt>
@@ -194,9 +216,10 @@ export function ResumeAnalysis({ state, onRetry }: ResumeAnalysisProps) {
       )}
 
       <p className="analysis-privacy">
-        Your extracted resume text is sent to Gemini for this analysis. ResumeMatch
-        does not persist the resume text or generated profile; this result stays
-        only in memory on this page.
+        Your extracted resume text is sent to Gemini for this analysis.{" "}
+        {persistsToAccount
+          ? "ResumeMatch saves the extracted text and latest generated profile to your signed-in account; the original file is not stored."
+          : "ResumeMatch does not persist the resume text or generated profile; this result stays only in memory on this page."}
       </p>
     </section>
   );

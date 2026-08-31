@@ -12,6 +12,9 @@ import {
 const RESUME_TEXT = `Ada Lovelace\r\n  Senior Software Engineer\t\nTypeScript and distributed systems`;
 const PREFERENCES = {
   targetLocation: "Seattle, WA",
+  additionalLocations: [],
+  radiusMiles: 25,
+  workArrangement: "any",
   minimumSalary: 140_000,
 };
 const GENERATED_ANALYSIS = {
@@ -30,6 +33,9 @@ describe("parseAnalyzeResumeRequest", () => {
         resumeText: RESUME_TEXT,
         preferences: {
           targetLocation: "  Seattle, WA  ",
+          additionalLocations: [],
+          radiusMiles: 25,
+          workArrangement: "any",
           minimumSalary: 140_000,
         },
       }),

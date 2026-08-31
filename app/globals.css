@@ -1126,6 +1126,38 @@ input:disabled {
   scroll-margin-top: 24px;
 }
 
+.saved-resume-loading {
+  min-height: 190px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.saved-resume-loading p,
+.resume-persistence-status {
+  margin: 0;
+  font-size: 12px;
+}
+
+.saved-resume-notice {
+  margin-bottom: 14px;
+}
+
+.resume-persistence-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  padding: 0 4px;
+}
+
+.resume-persistence-status--saved {
+  color: var(--success);
+}
+
 .preference-intro {
   margin: -6px 0 20px;
 }
@@ -1157,16 +1189,135 @@ input:disabled {
   gap: 17px;
 }
 
+.preference-wide-field {
+  grid-column: 1 / -1;
+}
+
 .field {
   min-width: 0;
   display: grid;
   gap: 7px;
 }
 
-.field > label {
+.field > label,
+.field-label,
+.work-arrangement-field legend {
   color: #364056;
   font-size: 12px;
   font-weight: 750;
+}
+
+.range-heading,
+.additional-location-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.range-heading output {
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.radius-field input[type="range"] {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  accent-color: var(--brand);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.additional-location-heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.compact-button {
+  min-height: 36px;
+  padding: 7px 11px;
+  font-size: 12px;
+}
+
+.additional-location-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 9px;
+}
+
+.remove-location-button {
+  border: 0;
+  color: var(--danger);
+  background: transparent;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.remove-location-button:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.work-arrangement-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.work-arrangement-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.work-arrangement-options label {
+  position: relative;
+  cursor: pointer;
+}
+
+.work-arrangement-options input {
+  position: absolute;
+  width: 1px;
+  min-height: 1px;
+  opacity: 0;
+}
+
+.work-arrangement-options span {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d8deea;
+  border-radius: 10px;
+  color: var(--muted);
+  background: white;
+  font-size: 12px;
+  font-weight: 750;
+  transition: border-color 140ms ease, box-shadow 140ms ease,
+    color 140ms ease, background 140ms ease;
+}
+
+.work-arrangement-options input:checked + span {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.work-arrangement-options input:focus-visible + span {
+  box-shadow: 0 0 0 3px rgba(49, 87, 213, 0.14);
+}
+
+.work-arrangement-options input:disabled + span,
+.remove-location-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 .field input {
@@ -1777,6 +1928,7 @@ input:disabled {
 :root[data-theme="dark"] .google-button,
 :root[data-theme="dark"] .secondary-button,
 :root[data-theme="dark"] .field input,
+:root[data-theme="dark"] .work-arrangement-options span,
 :root[data-theme="dark"] .upload-icon,
 :root[data-theme="dark"] .selected-file {
   border-color: #39455b;
@@ -1887,12 +2039,20 @@ input:disabled {
 }
 
 :root[data-theme="dark"] .field > label,
+:root[data-theme="dark"] .field-label,
+:root[data-theme="dark"] .work-arrangement-field legend,
 :root[data-theme="dark"] .analysis-loading p,
 :root[data-theme="dark"] .profile-summary p,
 :root[data-theme="dark"] .profile-facts dd,
 :root[data-theme="dark"] .job-search-loading-copy,
 :root[data-theme="dark"] .job-facts dd {
   color: #d7deeb;
+}
+
+:root[data-theme="dark"] .work-arrangement-options input:checked + span {
+  border-color: #6f8df0;
+  color: #b9c8ff;
+  background: #253456;
 }
 
 :root[data-theme="dark"] .profile-preview h4,
@@ -2050,8 +2210,18 @@ input:disabled {
 
   .preference-actions,
   .form-error,
-  .analysis-consent-note {
+  .analysis-consent-note,
+  .preference-wide-field {
     grid-column: 1;
+  }
+
+  .work-arrangement-options {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .additional-location-heading {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .preference-actions {

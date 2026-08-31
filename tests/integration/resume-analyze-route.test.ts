@@ -46,6 +46,9 @@ const INPUT = {
     "Ada Lovelace\nSenior Software Engineer\nBuilt TypeScript distributed systems.",
   preferences: {
     targetLocation: "Seattle, WA",
+    additionalLocations: [],
+    radiusMiles: 25,
+    workArrangement: "any",
     minimumSalary: 140_000,
   },
 };

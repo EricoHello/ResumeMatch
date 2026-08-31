@@ -3,7 +3,7 @@ import {
   type AnalyzeResumeRequest,
   type ResumeProfile,
 } from "@/lib/analysis/types";
-import type { JobPreferences } from "@/lib/preferences/types";
+import { parseJobPreferences } from "@/lib/preferences/validation";
 
 const EXPERIENCE_LEVEL_SET = new Set<string>(EXPERIENCE_LEVELS);
 const MAX_RETRY_AFTER_SECONDS = 24 * 60 * 60;
@@ -50,29 +50,35 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
-function isPreferences(value: unknown): value is JobPreferences {
-  if (typeof value !== "object" || value === null) return false;
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.targetLocation === "string" &&
-    typeof candidate.minimumSalary === "number"
-  );
-}
-
-function isResumeProfile(value: unknown): value is ResumeProfile {
-  if (typeof value !== "object" || value === null) return false;
+function parseResumeProfile(value: unknown): ResumeProfile | null {
+  if (typeof value !== "object" || value === null) return null;
   const profile = value as Record<string, unknown>;
 
-  return (
+  if (!(
     typeof profile.summary === "string" &&
     typeof profile.experienceLevel === "string" &&
     EXPERIENCE_LEVEL_SET.has(profile.experienceLevel) &&
     isStringArray(profile.skills) &&
     isStringArray(profile.recentJobTitles) &&
     isStringArray(profile.targetRoles) &&
-    isStringArray(profile.searchKeywords) &&
-    isPreferences(profile.preferences)
-  );
+    isStringArray(profile.searchKeywords)
+  )) {
+    return null;
+  }
+
+  try {
+    return {
+      summary: profile.summary,
+      experienceLevel: profile.experienceLevel as ResumeProfile["experienceLevel"],
+      skills: profile.skills,
+      recentJobTitles: profile.recentJobTitles,
+      targetRoles: profile.targetRoles,
+      searchKeywords: profile.searchKeywords,
+      preferences: parseJobPreferences(profile.preferences),
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function errorMessage(response: Response) {
@@ -137,17 +143,18 @@ export async function analyzeResume(
     );
   }
 
-  if (
+  const profile =
     typeof body !== "object" ||
     body === null ||
-    !("profile" in body) ||
-    !isResumeProfile(body.profile)
-  ) {
+    !("profile" in body)
+      ? null
+      : parseResumeProfile(body.profile);
+  if (!profile) {
     throw new ResumeAnalysisClientError(
       "The analysis service returned an unexpected response.",
       { status: response.status },
     );
   }
 
-  return body.profile;
+  return profile;
 }

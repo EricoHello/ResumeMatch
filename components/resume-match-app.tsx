@@ -35,6 +35,11 @@ import {
 import type { JobPreferences as JobPreferencesValue } from "@/lib/preferences/types";
 import type { ResumeProfile } from "@/lib/analysis/types";
 import {
+  loadSavedResume,
+  saveSavedResume,
+} from "@/lib/resume/saved-client";
+import type { SavedResume } from "@/lib/resume/saved-types";
+import {
   beginGuestSession,
   clearGuestSession,
   readGuestSession,
@@ -47,6 +52,15 @@ type AuthState =
   | { status: "user"; user: User };
 
 type AppView = "match" | "account";
+type SavedResumeLoadState =
+  | { status: "loading" }
+  | { status: "ready" }
+  | { status: "error"; message: string };
+type ResumePersistenceState =
+  | { status: "idle" }
+  | { status: "saving" }
+  | { status: "saved" }
+  | { status: "error"; message: string };
 
 function readableAuthError(error: unknown) {
   if (typeof error === "object" && error !== null && "code" in error) {
@@ -79,13 +93,27 @@ function ResumeJourney({
   identity: PreferenceIdentity;
   onProfileChange: (profile: ResumeProfile | null) => void;
 }) {
+  const signedInUser = identity.kind === "user" ? identity.user : null;
   const [resume, setResume] = useState<ResumeParseResult | null>(null);
+  const [resumeIsLoadedFromAccount, setResumeIsLoadedFromAccount] =
+    useState(false);
+  const [savedResumeLoadState, setSavedResumeLoadState] =
+    useState<SavedResumeLoadState>(
+      signedInUser ? { status: "loading" } : { status: "ready" },
+    );
+  const [persistenceState, setPersistenceState] =
+    useState<ResumePersistenceState>({ status: "idle" });
   const [readyPreferences, setReadyPreferences] =
     useState<JobPreferencesValue | null>(null);
   const [analysisState, setAnalysisState] =
     useState<ResumeAnalysisState | null>(null);
   const journeyRef = useRef<HTMLDivElement | null>(null);
   const analysisRequestRef = useRef<AbortController | null>(null);
+  const savedResumeLoadRequestRef = useRef<AbortController | null>(null);
+  const persistenceAbortRef = useRef<AbortController | null>(null);
+  const persistenceQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const latestPersistenceRequestRef = useRef(0);
+  const pendingSavedResumeRef = useRef<SavedResume | null>(null);
   const lastAutomaticAttemptRef = useRef<{
     resume: ResumeParseResult;
     preferences: JobPreferencesValue;
@@ -97,14 +125,128 @@ function ResumeJourney({
       heading?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, []);
+  }, [savedResumeLoadState.status]);
 
   useEffect(() => {
     return () => {
       analysisRequestRef.current?.abort();
       analysisRequestRef.current = null;
+      savedResumeLoadRequestRef.current?.abort();
+      savedResumeLoadRequestRef.current = null;
+      persistenceAbortRef.current?.abort();
+      persistenceAbortRef.current = null;
     };
   }, []);
+
+  const persistResume = useCallback(
+    (savedResume: SavedResume) => {
+      if (!signedInUser) return;
+
+      pendingSavedResumeRef.current = savedResume;
+      const requestNumber = latestPersistenceRequestRef.current + 1;
+      latestPersistenceRequestRef.current = requestNumber;
+      setPersistenceState({ status: "saving" });
+
+      if (!persistenceAbortRef.current) {
+        persistenceAbortRef.current = new AbortController();
+      }
+      const signal = persistenceAbortRef.current.signal;
+      const operation = persistenceQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          await saveSavedResume(signedInUser, savedResume, signal);
+        });
+      persistenceQueueRef.current = operation;
+
+      void operation.then(
+        () => {
+          if (
+            !signal.aborted &&
+            latestPersistenceRequestRef.current === requestNumber
+          ) {
+            setPersistenceState({ status: "saved" });
+          }
+        },
+        (error: unknown) => {
+          if (
+            !signal.aborted &&
+            latestPersistenceRequestRef.current === requestNumber
+          ) {
+            setPersistenceState({
+              status: "error",
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "We couldn’t save your resume. Please try again.",
+            });
+          }
+        },
+      );
+    },
+    [signedInUser],
+  );
+
+  const loadAccountResume = useCallback(async () => {
+    if (!signedInUser) return;
+
+    savedResumeLoadRequestRef.current?.abort();
+    const controller = new AbortController();
+    savedResumeLoadRequestRef.current = controller;
+    setSavedResumeLoadState({ status: "loading" });
+
+    try {
+      const savedResume = await loadSavedResume(
+        signedInUser,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+
+      if (savedResume) {
+        const loadedResume: ResumeParseResult = {
+          fileName: "Saved resume",
+          fileType: "pdf",
+          text: savedResume.resumeText,
+          characterCount: savedResume.resumeText.length,
+          warnings: [],
+        };
+        setResume(loadedResume);
+        setResumeIsLoadedFromAccount(true);
+
+        if (savedResume.profile) {
+          setReadyPreferences(savedResume.profile.preferences);
+          setAnalysisState({ status: "success", profile: savedResume.profile });
+          lastAutomaticAttemptRef.current = {
+            resume: loadedResume,
+            preferences: savedResume.profile.preferences,
+          };
+          onProfileChange(savedResume.profile);
+        }
+      }
+
+      setSavedResumeLoadState({ status: "ready" });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setSavedResumeLoadState({
+        status: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "We couldn’t load your saved resume. You can retry or upload a new one.",
+      });
+    } finally {
+      if (savedResumeLoadRequestRef.current === controller) {
+        savedResumeLoadRequestRef.current = null;
+      }
+    }
+  }, [onProfileChange, signedInUser]);
+
+  useEffect(() => {
+    if (!signedInUser) return;
+    const frame = window.requestAnimationFrame(() => {
+      void loadAccountResume();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [loadAccountResume, signedInUser]);
 
   const clearAnalysis = useCallback(() => {
     analysisRequestRef.current?.abort();
@@ -114,15 +256,26 @@ function ResumeJourney({
     onProfileChange(null);
   }, [onProfileChange]);
 
-  const handleResultChange = useCallback((nextResult: ResumeParseResult | null) => {
-    analysisRequestRef.current?.abort();
-    analysisRequestRef.current = null;
-    lastAutomaticAttemptRef.current = null;
-    setResume(nextResult);
-    setReadyPreferences(null);
-    setAnalysisState(null);
-    onProfileChange(null);
-  }, [onProfileChange]);
+  const handleResultChange = useCallback(
+    (nextResult: ResumeParseResult | null) => {
+      analysisRequestRef.current?.abort();
+      analysisRequestRef.current = null;
+      lastAutomaticAttemptRef.current = null;
+      setResume(nextResult);
+      setResumeIsLoadedFromAccount(false);
+      setSavedResumeLoadState({ status: "ready" });
+      setReadyPreferences(null);
+      setAnalysisState(null);
+      onProfileChange(null);
+
+      if (nextResult && signedInUser) {
+        persistResume({ resumeText: nextResult.text, profile: null });
+      } else {
+        setPersistenceState({ status: "idle" });
+      }
+    },
+    [onProfileChange, persistResume, signedInUser],
+  );
 
   const runAnalysis = useCallback(
     async (
@@ -135,6 +288,13 @@ function ResumeJourney({
         !retry &&
         previousAttempt?.resume === resumeToAnalyze &&
         previousAttempt.preferences.targetLocation === preferences.targetLocation &&
+        previousAttempt.preferences.radiusMiles === preferences.radiusMiles &&
+        previousAttempt.preferences.workArrangement === preferences.workArrangement &&
+        previousAttempt.preferences.additionalLocations.length ===
+          preferences.additionalLocations.length &&
+        previousAttempt.preferences.additionalLocations.every(
+          (location, index) => location === preferences.additionalLocations[index],
+        ) &&
         previousAttempt.preferences.minimumSalary === preferences.minimumSalary
       ) {
         return;
@@ -148,6 +308,9 @@ function ResumeJourney({
         preferences,
       };
       setAnalysisState({ status: "loading" });
+      if (signedInUser) {
+        persistResume({ resumeText: resumeToAnalyze.text, profile: null });
+      }
 
       try {
         const profile = await analyzeResume(
@@ -166,6 +329,9 @@ function ResumeJourney({
         }
         setAnalysisState({ status: "success", profile });
         onProfileChange(profile);
+        if (signedInUser) {
+          persistResume({ resumeText: resumeToAnalyze.text, profile });
+        }
       } catch (error) {
         if (
           controller.signal.aborted ||
@@ -190,7 +356,7 @@ function ResumeJourney({
         }
       }
     },
-    [onProfileChange],
+    [onProfileChange, persistResume, signedInUser],
   );
 
   const handleReadyChange = useCallback(
@@ -212,6 +378,11 @@ function ResumeJourney({
     void runAnalysis(resume, readyPreferences, true);
   }, [readyPreferences, resume, runAnalysis]);
 
+  const retryPersistence = useCallback(() => {
+    const pendingResume = pendingSavedResumeRef.current;
+    if (pendingResume) persistResume(pendingResume);
+  }, [persistResume]);
+
   return (
     <div
       ref={journeyRef}
@@ -226,12 +397,68 @@ function ResumeJourney({
               : "upload"
       }
     >
-      <ResumeUploader onResultChange={handleResultChange} />
+      {savedResumeLoadState.status === "loading" ? (
+        <section className="uploader-card saved-resume-loading" aria-label="Loading saved resume">
+          <span className="spinner" aria-hidden="true" />
+          <p role="status">Checking your account for a saved resume…</p>
+        </section>
+      ) : (
+        <>
+          {savedResumeLoadState.status === "error" && (
+            <div className="notice notice--error saved-resume-notice" role="alert">
+              <span className="notice-icon" aria-hidden="true">!</span>
+              <div>
+                <strong>Couldn’t load saved resume</strong>
+                <p>{savedResumeLoadState.message}</p>
+                <div className="notice-actions">
+                  <button type="button" onClick={() => void loadAccountResume()}>
+                    Try again
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          <ResumeUploader
+            key={resumeIsLoadedFromAccount ? "saved-resume" : "resume-upload"}
+            initialResult={resumeIsLoadedFromAccount ? resume : null}
+            initialResultIsSaved={resumeIsLoadedFromAccount}
+            useReplaceLabel={Boolean(signedInUser)}
+            onResultChange={handleResultChange}
+          />
+        </>
+      )}
+      {signedInUser && persistenceState.status === "saving" && (
+        <p className="resume-persistence-status" role="status">
+          <span className="spinner spinner--small" aria-hidden="true" />
+          Saving resume to your account…
+        </p>
+      )}
+      {signedInUser && persistenceState.status === "saved" && (
+        <p className="resume-persistence-status resume-persistence-status--saved" role="status">
+          Resume changes saved to your account.
+        </p>
+      )}
+      {signedInUser && persistenceState.status === "error" && (
+        <div className="notice notice--error saved-resume-notice" role="alert">
+          <span className="notice-icon" aria-hidden="true">!</span>
+          <div>
+            <strong>Couldn’t save resume</strong>
+            <p>{persistenceState.message}</p>
+            <div className="notice-actions">
+              <button type="button" onClick={retryPersistence}>Try again</button>
+            </div>
+          </div>
+        </div>
+      )}
       {resume && (
         <JobPreferences identity={identity} onReadyChange={handleReadyChange} />
       )}
       {analysisState && (
-        <ResumeAnalysis state={analysisState} onRetry={retryAnalysis} />
+        <ResumeAnalysis
+          state={analysisState}
+          persistsToAccount={Boolean(signedInUser)}
+          onRetry={retryAnalysis}
+        />
       )}
       {analysisState?.status === "success" && (
         <JobSearch profile={analysisState.profile} />
@@ -554,9 +781,9 @@ export function ResumeMatchApp() {
               <svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M10 1.75a4 4 0 0 0-4 4v2H5A1.75 1.75 0 0 0 3.25 9.5v6.75A1.75 1.75 0 0 0 5 18h10a1.75 1.75 0 0 0 1.75-1.75V9.5A1.75 1.75 0 0 0 15 7.75h-1v-2a4 4 0 0 0-4-4Zm2.5 6h-5v-2a2.5 2.5 0 0 1 5 0v2Z" />
               </svg>
-              Resume files and AI profiles are not saved. {identity.kind === "user"
-                ? "Your job preferences are saved to your account. "
-                : "Guest preferences stay only in this browser tab. "}
+              {identity.kind === "user"
+                ? "Extracted resume text, your latest AI profile, and job preferences are saved to your account. The original file is not stored. "
+                : "Resume files and AI profiles are not saved. Guest preferences stay only in this browser tab. "}
               Extracted text is sent to Gemini only when you continue from job
               preferences.
             </p>
