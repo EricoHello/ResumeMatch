@@ -196,6 +196,23 @@ test("offers Google Sign-In and guest mode before showing the uploader", async (
   await expect(page.getByLabel("Upload resume")).toHaveCount(0);
 });
 
+test("switches color theme and keeps the choice after reload", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(
+    page.getByRole("button", { name: "Switch to light mode" }),
+  ).toBeVisible();
+
+  await page.reload();
+
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(
+    page.getByRole("button", { name: "Switch to light mode" }),
+  ).toBeVisible();
+});
+
 test("shows guest Account details and returns to the active matching session", async ({
   page,
 }) => {

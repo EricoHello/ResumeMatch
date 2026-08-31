@@ -15,6 +15,7 @@ import {
 } from "@/components/job-preferences";
 import { Account } from "@/components/account";
 import { JobSearch } from "@/components/job-search";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   ResumeAnalysis,
   type ResumeAnalysisState,
@@ -450,6 +451,7 @@ export function ResumeMatchApp() {
               Account
             </button>
           )}
+          <ThemeToggle />
         </div>
       </nav>
 

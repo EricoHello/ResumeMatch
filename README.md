@@ -12,6 +12,7 @@ PDF and DOCX files are parsed into raw text. Signed-in users can load and save j
 
 - Optional Google Sign-In with Firebase Authentication
 - In-app Account view for Firebase identity, saved preferences, session profile status, and guest access
+- Persistent light and dark themes with system-preference detection
 - Session-only guest mode with no guest Firestore writes
 - Drag-and-drop PDF/DOCX upload with progress and recovery states
 - Server-side PDF extraction with `pdf-parse` and DOCX extraction with `mammoth`

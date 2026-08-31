@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --ink: #172037;
   --muted: #667085;
   --line: #dfe4ec;
@@ -14,6 +15,37 @@
   --surface: #ffffff;
   --background: #f5f7fb;
   --shadow: 0 24px 70px rgba(25, 38, 74, 0.1);
+  --ambient-brand: rgba(132, 151, 255, 0.13);
+  --ambient-success: rgba(100, 210, 177, 0.1);
+  --card-border: rgba(214, 220, 232, 0.9);
+  --nav-surface: rgba(255, 255, 255, 0.82);
+  --pill-surface: rgba(255, 255, 255, 0.72);
+  --strip-surface: rgba(255, 255, 255, 0.76);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #edf1fa;
+  --muted: #a9b3c6;
+  --line: #303a4d;
+  --brand: #9eafff;
+  --brand-dark: #5978e8;
+  --brand-soft: #202b50;
+  --success: #77d8b6;
+  --success-soft: #15372d;
+  --danger: #ff9ea6;
+  --danger-soft: #3b2025;
+  --warning: #ffd080;
+  --warning-soft: #392d18;
+  --surface: #171e2b;
+  --background: #0d121c;
+  --shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+  --ambient-brand: rgba(72, 100, 190, 0.18);
+  --ambient-success: rgba(45, 137, 111, 0.12);
+  --card-border: rgba(74, 87, 112, 0.62);
+  --nav-surface: rgba(24, 31, 45, 0.88);
+  --pill-surface: rgba(23, 30, 43, 0.82);
+  --strip-surface: rgba(23, 30, 43, 0.82);
 }
 
 * {
@@ -21,6 +53,7 @@
 }
 
 html {
+  background: var(--background);
   scroll-behavior: smooth;
 }
 
@@ -28,8 +61,8 @@ body {
   margin: 0;
   color: var(--ink);
   background:
-    radial-gradient(circle at 8% 4%, rgba(132, 151, 255, 0.13), transparent 24rem),
-    radial-gradient(circle at 92% 17%, rgba(100, 210, 177, 0.1), transparent 22rem),
+    radial-gradient(circle at 8% 4%, var(--ambient-brand), transparent 24rem),
+    radial-gradient(circle at 92% 17%, var(--ambient-success), transparent 22rem),
     var(--background);
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -64,6 +97,49 @@ button {
   gap: 10px;
 }
 
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: grid;
+  cursor: pointer;
+  place-items: center;
+  border: 1px solid #d8def5;
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--nav-surface);
+  transition: border-color 140ms ease, color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.theme-toggle:hover {
+  border-color: #bcc8ef;
+  color: var(--brand);
+  background: var(--brand-soft);
+  transform: translateY(-1px);
+}
+
+.theme-toggle svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.theme-toggle-sun {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-toggle-moon {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-toggle-sun {
+  display: block;
+}
+
 .nav-account-button {
   min-height: 36px;
   padding: 0 14px;
@@ -71,7 +147,7 @@ button {
   border: 1px solid #d8def5;
   border-radius: 10px;
   color: var(--brand);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--nav-surface);
   font-size: 12px;
   font-weight: 750;
   transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
@@ -112,7 +188,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--pill-surface);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -161,7 +237,7 @@ button {
 
 .uploader-card {
   overflow: hidden;
-  border: 1px solid rgba(214, 220, 232, 0.9);
+  border: 1px solid var(--card-border);
   border-radius: 22px;
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -177,7 +253,7 @@ button {
 .preferences-card,
 .analysis-card,
 .job-search-card {
-  border: 1px solid rgba(214, 220, 232, 0.9);
+  border: 1px solid var(--card-border);
   border-radius: 22px;
   background: var(--surface);
   box-shadow: var(--shadow);
@@ -284,9 +360,9 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  border: 1px solid rgba(214, 220, 232, 0.9);
+  border: 1px solid var(--card-border);
   border-radius: 13px;
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--strip-surface);
 }
 
 .account-copy {
@@ -414,7 +490,7 @@ button {
 }
 
 .account-card {
-  border: 1px solid rgba(214, 220, 232, 0.9);
+  border: 1px solid var(--card-border);
   border-radius: 18px;
   background: var(--surface);
   box-shadow: 0 16px 46px rgba(25, 38, 74, 0.08);
@@ -969,6 +1045,7 @@ button {
 .nav-account-button:focus-visible,
 .account-back:focus-visible,
 .account-exit-button:focus-visible,
+.theme-toggle:focus-visible,
 .field input:focus-visible,
 .card-heading h2:focus-visible,
 .auth-card h2:focus-visible,
@@ -1686,6 +1763,182 @@ input:disabled {
   clip-path: inset(50%);
 }
 
+:root[data-theme="dark"] .theme-toggle,
+:root[data-theme="dark"] .nav-account-button {
+  border-color: #3c4963;
+}
+
+:root[data-theme="dark"] .theme-toggle:hover,
+:root[data-theme="dark"] .nav-account-button:hover,
+:root[data-theme="dark"] .nav-account-button[aria-current="page"] {
+  border-color: #58698d;
+}
+
+:root[data-theme="dark"] .google-button,
+:root[data-theme="dark"] .secondary-button,
+:root[data-theme="dark"] .field input,
+:root[data-theme="dark"] .upload-icon,
+:root[data-theme="dark"] .selected-file {
+  border-color: #39455b;
+  color: var(--ink);
+  background: #1d2534;
+}
+
+:root[data-theme="dark"] .google-button:hover:not(:disabled),
+:root[data-theme="dark"] .secondary-button:hover {
+  border-color: #56647d;
+  background: #242e40;
+}
+
+:root[data-theme="dark"] .account-card {
+  box-shadow: 0 16px 46px rgba(0, 0, 0, 0.27);
+}
+
+:root[data-theme="dark"] .account-avatar {
+  border-color: #45547c;
+}
+
+:root[data-theme="dark"] .account-avatar--guest {
+  border-color: #356b59;
+}
+
+:root[data-theme="dark"] .account-facts div,
+:root[data-theme="dark"] .dropzone,
+:root[data-theme="dark"] .dropzone--uploading,
+:root[data-theme="dark"] .dropzone--parsing,
+:root[data-theme="dark"] .text-output,
+:root[data-theme="dark"] .profile-preview,
+:root[data-theme="dark"] .job-card,
+:root[data-theme="dark"] .job-search-empty {
+  border-color: #303b50;
+  color: var(--ink);
+  background: #111824;
+}
+
+:root[data-theme="dark"] .dropzone {
+  border-color: #4c5971;
+}
+
+:root[data-theme="dark"] .dropzone:hover,
+:root[data-theme="dark"] .dropzone:focus-visible,
+:root[data-theme="dark"] .dropzone--active,
+:root[data-theme="dark"] .dropzone--accept {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+:root[data-theme="dark"] .dropzone--reject {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+:root[data-theme="dark"] .file-status,
+:root[data-theme="dark"] .analysis-consent-note {
+  color: var(--muted);
+  background: #222b3b;
+}
+
+:root[data-theme="dark"] .notice--error {
+  color: #ffb0b7;
+  border-color: #713a42;
+}
+
+:root[data-theme="dark"] .notice--warning {
+  color: #ffd48e;
+  border-color: #6a5429;
+}
+
+:root[data-theme="dark"] .saved-note,
+:root[data-theme="dark"] .analysis-success,
+:root[data-theme="dark"] .job-search-success,
+:root[data-theme="dark"] .job-rank-badge {
+  border-color: #326a57;
+}
+
+:root[data-theme="dark"] .analysis-success,
+:root[data-theme="dark"] .job-search-success {
+  color: #a1e7cd;
+  background: linear-gradient(135deg, var(--success-soft), #122820);
+}
+
+:root[data-theme="dark"] .analysis-success p,
+:root[data-theme="dark"] .job-search-success p {
+  color: #91c9b5;
+}
+
+:root[data-theme="dark"] .primary-button,
+:root[data-theme="dark"] .job-apply-link {
+  color: white;
+  background: #4969d8;
+}
+
+:root[data-theme="dark"] .primary-button:hover:not(:disabled),
+:root[data-theme="dark"] .job-apply-link:hover {
+  background: var(--brand-dark);
+}
+
+:root[data-theme="dark"] .step-label,
+:root[data-theme="dark"] .account-storage-note,
+:root[data-theme="dark"] .privacy-note,
+:root[data-theme="dark"] .dropzone-rules,
+:root[data-theme="dark"] .job-search-start small,
+:root[data-theme="dark"] .job-facts dt {
+  color: #939fb4;
+}
+
+:root[data-theme="dark"] .field > label,
+:root[data-theme="dark"] .analysis-loading p,
+:root[data-theme="dark"] .profile-summary p,
+:root[data-theme="dark"] .profile-facts dd,
+:root[data-theme="dark"] .job-search-loading-copy,
+:root[data-theme="dark"] .job-facts dd {
+  color: #d7deeb;
+}
+
+:root[data-theme="dark"] .profile-preview h4,
+:root[data-theme="dark"] .profile-preview dt,
+:root[data-theme="dark"] .analysis-consent-note {
+  color: #abb6c9;
+}
+
+:root[data-theme="dark"] .profile-tags li {
+  border-color: #45547c;
+  color: #bdc9ff;
+}
+
+:root[data-theme="dark"] .job-match-reason {
+  color: #aebdff;
+}
+
+:root[data-theme="dark"] .retry-countdown,
+:root[data-theme="dark"] .job-search-error-actions p {
+  color: #ffadb4;
+}
+
+:root[data-theme="dark"] .profile-summary,
+:root[data-theme="dark"] .profile-facts {
+  border-color: var(--line);
+}
+
+:root[data-theme="dark"] .progress-track,
+:root[data-theme="dark"] .analysis-progress,
+:root[data-theme="dark"] .job-search-progress {
+  background: #313b4e;
+}
+
+:root[data-theme="dark"] .spinner {
+  border-color: #3b465d;
+  border-top-color: var(--brand);
+}
+
+:root[data-theme="dark"] .field input::placeholder {
+  color: #79859a;
+}
+
+:root[data-theme="dark"] .result-meta span:not(:last-child)::after {
+  color: #69758a;
+}
+
 @media (max-width: 640px) {
   .page-shell {
     padding: 0 14px 34px;
@@ -1700,7 +1953,7 @@ input:disabled {
   }
 
   .nav-actions {
-    gap: 0;
+    gap: 6px;
   }
 
   .page-content {
