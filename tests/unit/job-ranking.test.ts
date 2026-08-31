@@ -147,6 +147,8 @@ describe("rankJobCandidates", () => {
       salary: "$90,000 / year",
       minimumSalary: 90_000,
       maximumSalary: 90_000,
+      isRemote: true,
+      workArrangement: "remote",
       description: "Own a product backlog and coordinate delivery.",
       postedAt: "2 months ago",
       postedTimestamp: now / 1_000 - 60 * 86_400,
@@ -178,6 +180,58 @@ describe("rankJobCandidates", () => {
     expect(result.topRanked).toEqual([
       expect.objectContaining({ title: "Staff Software Engineer" }),
     ]);
+  });
+
+  it("excludes relevant non-remote jobs outside the preferred location", () => {
+    const result = rankJobCandidatesWithDiagnostics(
+      [
+        candidate("local-lifeguard", {
+          title: "Lifeguard",
+          location: "Seattle, WA",
+        }),
+        candidate("wrong-location-lifeguard", {
+          title: "Lifeguard",
+          location: "Riverdale, MD",
+        }),
+      ],
+      {
+        ...PROFILE,
+        skills: ["Water safety"],
+        recentJobTitles: ["Lifeguard"],
+        targetRoles: ["Lifeguard"],
+        searchKeywords: ["aquatics"],
+      },
+      now,
+    );
+
+    expect(result.jobs.map((job) => job.id)).toEqual(["local-lifeguard"]);
+    expect(result.remainingAfterFiltering).toBe(1);
+  });
+
+  it("allows remote jobs regardless of their displayed location", () => {
+    const matches = rankJobCandidates(
+      [
+        candidate("remote", {
+          location: "Riverdale, MD",
+          isRemote: true,
+          workArrangement: "remote",
+        }),
+      ],
+      PROFILE,
+      now,
+    );
+
+    expect(matches).toEqual([expect.objectContaining({ id: "remote" })]);
+  });
+
+  it("accepts supported Seattle metro locations", () => {
+    const matches = rankJobCandidates(
+      [candidate("nearby", { location: "Bellevue, WA" })],
+      PROFILE,
+      now,
+    );
+
+    expect(matches).toEqual([expect.objectContaining({ id: "nearby" })]);
   });
 
   it("ranks unrelated jobs using only location, salary, and recency", () => {
@@ -220,5 +274,6 @@ describe("rankJobCandidates", () => {
     ]);
     expect(result.jobs[1].salary).toBeNull();
     expect(result.jobs.every((job) => job.matchedSkills.length === 0)).toBe(true);
+    expect(result.remainingAfterFiltering).toBe(3);
   });
 });

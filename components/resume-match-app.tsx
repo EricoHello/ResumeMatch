@@ -685,9 +685,9 @@ export function ResumeMatchApp() {
       <div className="page-content" id="top">
         <div hidden={activeView !== "match"}>
           <header className="hero">
-            <p className="eyebrow">Resume ingestion, simplified</p>
+            <p className="eyebrow">Job search, simplified</p>
             <h1 ref={mainHeadingRef} tabIndex={-1}>
-              See what your resume says, in plain text.
+              Your one-stop shop for job searching.
             </h1>
             <p className="hero-copy">
               Upload a PDF or DOCX resume, add your job preferences, and turn it into

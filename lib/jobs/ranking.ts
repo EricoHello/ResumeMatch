@@ -33,6 +33,17 @@ const GENERIC_ROLE_WORDS = new Set([
   "staff",
 ]);
 
+const SEATTLE_METRO_LOCATIONS = new Set([
+  "bellevue",
+  "issaquah",
+  "kent",
+  "kirkland",
+  "redmond",
+  "renton",
+  "seattle",
+  "tukwila",
+]);
+
 function normalizedText(value: string) {
   return value
     .normalize("NFKD")
@@ -63,11 +74,39 @@ function preferredLocations(preferences: JobPreferences) {
   return [preferences.targetLocation, ...preferences.additionalLocations];
 }
 
+function primaryLocationName(value: string) {
+  const normalized = normalizedText(value.split(",", 1)[0] ?? value);
+  if (SEATTLE_METRO_LOCATIONS.has(normalized)) return "seattle-metro";
+  return normalized;
+}
+
+function locationsMatch(desired: string, actual: string) {
+  const desiredName = primaryLocationName(desired);
+  const actualName = primaryLocationName(actual);
+  if (!desiredName || !actualName || /^remote$/i.test(desired)) return false;
+
+  const desiredPhrase = ` ${desiredName} `;
+  const actualPhrase = ` ${actualName} `;
+  return (
+    desiredName === actualName ||
+    actualPhrase.includes(desiredPhrase) ||
+    desiredPhrase.includes(actualPhrase)
+  );
+}
+
+function locationEligible(candidate: JobCandidate, preferences: JobPreferences) {
+  if (candidate.isRemote) return true;
+  return preferredLocations(preferences).some((location) =>
+    locationsMatch(location, candidate.location),
+  );
+}
+
 function locationScore(candidate: JobCandidate, preferences: JobPreferences) {
   const actualLocation = normalizedText(candidate.location);
   return Math.max(
     0,
     ...preferredLocations(preferences).map((location) => {
+      if (locationsMatch(location, candidate.location)) return 40;
       const desiredLocation = normalizedText(location);
       if (desiredLocation && actualLocation.includes(desiredLocation)) return 40;
       return overlapRatio(tokens(location), tokens(candidate.location)) * 24;
@@ -276,7 +315,12 @@ export function rankJobCandidatesWithDiagnostics(
     }))
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .filter(({ candidate, reasonablyRelated }) => {
-      if (!reasonablyRelated) return false;
+      if (
+        !reasonablyRelated ||
+        !locationEligible(candidate, profile.preferences)
+      ) {
+        return false;
+      }
       const key = normalizedText(
         `${candidate.title}|${candidate.company}|${candidate.location}`,
       );
@@ -330,6 +374,7 @@ export function rankJobCandidatesByPreferencesWithDiagnostics(
     })
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .filter(({ candidate }) => {
+      if (!locationEligible(candidate, preferences)) return false;
       const key = normalizedText(
         `${candidate.title}|${candidate.company}|${candidate.location}`,
       );
