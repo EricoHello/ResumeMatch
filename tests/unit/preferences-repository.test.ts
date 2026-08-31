@@ -10,7 +10,8 @@ const PREFERENCES = {
   targetLocation: "Seattle, WA",
   additionalLocations: ["Portland, OR"],
   radiusMiles: 25,
-  workArrangement: "hybrid" as const,
+  workArrangements: ["remote", "hybrid"] as const,
+  employmentTypes: ["contract", "full_time"] as const,
   minimumSalary: 125_000,
 };
 
@@ -66,11 +67,12 @@ describe("FirestorePreferencesRepository", () => {
     expect(double.userDocument.collection).toHaveBeenCalledWith("preferences");
     expect(double.preferencesCollection.doc).toHaveBeenCalledWith("job");
     expect(double.transaction.set).toHaveBeenCalledWith(double.document, {
-      schemaVersion: 2,
+      schemaVersion: 4,
       targetLocation: "Seattle, WA",
       additionalLocations: ["Portland, OR"],
       radiusMiles: 25,
-      workArrangement: "hybrid",
+      workArrangements: ["remote", "hybrid"],
+      employmentTypes: ["contract", "full_time"],
       minimumSalary: 125_000,
       salaryCurrency: "USD",
       salaryPeriod: "year",
@@ -102,7 +104,8 @@ describe("FirestorePreferencesRepository", () => {
       "targetLocation",
       "additionalLocations",
       "radiusMiles",
-      "workArrangement",
+      "workArrangements",
+      "employmentTypes",
       "minimumSalary",
       "salaryCurrency",
       "salaryPeriod",
@@ -117,7 +120,7 @@ describe("FirestorePreferencesRepository", () => {
       exists: true,
       data: () => ({
         ...PREFERENCES,
-        schemaVersion: 2,
+        schemaVersion: 4,
         salaryCurrency: "USD",
         salaryPeriod: "year",
         futureAiProfile: { skills: ["private"] },
@@ -148,7 +151,8 @@ describe("FirestorePreferencesRepository", () => {
       targetLocation: "Remote",
       additionalLocations: [],
       radiusMiles: 25,
-      workArrangement: "remote",
+      workArrangements: ["remote"],
+      employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
       minimumSalary: 100_000,
     });
   });

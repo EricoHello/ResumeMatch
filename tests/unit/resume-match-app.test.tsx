@@ -100,7 +100,13 @@ vi.mock("@/components/job-preferences", () => ({
       targetLocation: string;
       additionalLocations: string[];
       radiusMiles: number;
-      workArrangement: "any";
+      workArrangements: readonly ("remote" | "hybrid" | "in_person")[];
+      employmentTypes: readonly (
+        | "contract"
+        | "full_time"
+        | "part_time"
+        | "seasonal"
+      )[];
       minimumSalary: number;
     }) => void;
   }) => (
@@ -112,7 +118,8 @@ vi.mock("@/components/job-preferences", () => ({
           targetLocation: "Seattle, WA",
           additionalLocations: [],
           radiusMiles: 25,
-          workArrangement: "any",
+          workArrangements: ["remote", "hybrid", "in_person"],
+          employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
           minimumSalary: 140_000,
         })
       }
@@ -142,7 +149,8 @@ const PROFILE = {
     targetLocation: "Seattle, WA",
     additionalLocations: [],
     radiusMiles: 25,
-    workArrangement: "any" as const,
+    workArrangements: ["remote", "hybrid", "in_person"] as const,
+    employmentTypes: ["contract", "full_time", "part_time", "seasonal"] as const,
     minimumSalary: 140_000,
   },
 };

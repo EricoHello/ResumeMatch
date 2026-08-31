@@ -16,7 +16,8 @@ const SAVED_PREFERENCES = {
   targetLocation: "Seattle, WA",
   additionalLocations: [],
   radiusMiles: 25,
-  workArrangement: "any" as const,
+  workArrangements: ["remote", "hybrid", "in_person"] as const,
+  employmentTypes: ["contract", "full_time", "part_time", "seasonal"] as const,
   minimumSalary: 120_000,
 };
 
@@ -117,7 +118,8 @@ describe("Account", () => {
       targetLocation: "Remote",
       additionalLocations: [],
       radiusMiles: 25,
-      workArrangement: "remote",
+      workArrangements: ["remote"],
+      employmentTypes: ["full_time"],
       minimumSalary: 95_000,
     });
     const onGoogleSignIn = vi.fn();

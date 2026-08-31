@@ -9,7 +9,8 @@ const PREFERENCES = {
   targetLocation: "Seattle, WA",
   additionalLocations: [],
   radiusMiles: 25,
-  workArrangement: "hybrid",
+  workArrangements: ["hybrid"],
+  employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
   minimumSalary: 140_000,
 };
 

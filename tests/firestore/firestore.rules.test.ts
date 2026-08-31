@@ -27,11 +27,12 @@ let testEnvironment: RulesTestEnvironment;
 
 function jobPreferences(overrides: Record<string, unknown> = {}) {
   return {
-    schemaVersion: 2,
+    schemaVersion: 4,
     targetLocation: "San Francisco, CA",
     additionalLocations: [],
     radiusMiles: 25,
-    workArrangement: "any",
+    workArrangements: ["remote", "hybrid", "in_person"],
+    employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
     minimumSalary: 125_000,
     salaryCurrency: "USD",
     salaryPeriod: "year",
@@ -47,11 +48,12 @@ async function seedJobPreferences(
 ) {
   const createdAt = Timestamp.fromMillis(1_750_000_000_000);
   const data = {
-    schemaVersion: 2,
+    schemaVersion: 4,
     targetLocation: "San Francisco, CA",
     additionalLocations: [],
     radiusMiles: 25,
-    workArrangement: "any",
+    workArrangements: ["remote", "hybrid", "in_person"],
+    employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
     minimumSalary: 125_000,
     salaryCurrency: "USD",
     salaryPeriod: "year",
@@ -186,7 +188,12 @@ describe("Firestore job-preference rules", () => {
     ["a radius below the minimum", { radiusMiles: 4 }],
     ["a radius above the maximum", { radiusMiles: 101 }],
     ["a non-integer radius", { radiusMiles: 25.5 }],
-    ["an unsupported job type", { workArrangement: "sometimes" }],
+    ["a non-list work arrangement", { workArrangements: "remote" }],
+    ["an unsupported work arrangement", { workArrangements: ["sometimes"] }],
+    ["a duplicate work arrangement", { workArrangements: ["remote", "remote"] }],
+    ["a non-list employment type", { employmentTypes: "full_time" }],
+    ["an unsupported employment type", { employmentTypes: ["intern"] }],
+    ["a duplicate employment type", { employmentTypes: ["full_time", "full_time"] }],
     ["a non-integer salary", { minimumSalary: 100_000.5 }],
     ["a negative salary", { minimumSalary: -1 }],
     ["a salary over the upper bound", { minimumSalary: 10_000_001 }],

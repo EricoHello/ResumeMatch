@@ -289,7 +289,18 @@ function ResumeJourney({
         previousAttempt?.resume === resumeToAnalyze &&
         previousAttempt.preferences.targetLocation === preferences.targetLocation &&
         previousAttempt.preferences.radiusMiles === preferences.radiusMiles &&
-        previousAttempt.preferences.workArrangement === preferences.workArrangement &&
+        previousAttempt.preferences.workArrangements.length ===
+          preferences.workArrangements.length &&
+        previousAttempt.preferences.workArrangements.every(
+          (arrangement, index) =>
+            arrangement === preferences.workArrangements[index],
+        ) &&
+        previousAttempt.preferences.employmentTypes.length ===
+          preferences.employmentTypes.length &&
+        previousAttempt.preferences.employmentTypes.every(
+          (employmentType, index) =>
+            employmentType === preferences.employmentTypes[index],
+        ) &&
         previousAttempt.preferences.additionalLocations.length ===
           preferences.additionalLocations.length &&
         previousAttempt.preferences.additionalLocations.every(

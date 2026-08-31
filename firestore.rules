@@ -12,7 +12,8 @@ service cloud.firestore {
         'targetLocation',
         'additionalLocations',
         'radiusMiles',
-        'workArrangement',
+        'workArrangements',
+        'employmentTypes',
         'minimumSalary',
         'salaryCurrency',
         'salaryPeriod',
@@ -23,7 +24,8 @@ service cloud.firestore {
         'targetLocation',
         'additionalLocations',
         'radiusMiles',
-        'workArrangement',
+        'workArrangements',
+        'employmentTypes',
         'minimumSalary',
         'salaryCurrency',
         'salaryPeriod',
@@ -34,7 +36,7 @@ service cloud.firestore {
 
     function hasValidJobPreferenceValues(data) {
       return data.schemaVersion is int
-        && data.schemaVersion == 2
+        && data.schemaVersion == 4
         && data.targetLocation is string
         && data.targetLocation.size() >= 1
         && data.targetLocation.size() <= 120
@@ -61,8 +63,19 @@ service cloud.firestore {
         && data.radiusMiles is int
         && data.radiusMiles >= 5
         && data.radiusMiles <= 100
-        && data.workArrangement is string
-        && data.workArrangement in ['any', 'remote', 'hybrid', 'in_person']
+        && data.workArrangements is list
+        && data.workArrangements.size() <= 3
+        && data.workArrangements.toSet().size() == data.workArrangements.size()
+        && data.workArrangements.hasOnly(['remote', 'hybrid', 'in_person'])
+        && data.employmentTypes is list
+        && data.employmentTypes.size() <= 4
+        && data.employmentTypes.toSet().size() == data.employmentTypes.size()
+        && data.employmentTypes.hasOnly([
+          'contract',
+          'full_time',
+          'part_time',
+          'seasonal'
+        ])
         && data.minimumSalary is int
         && data.minimumSalary >= 0
         && data.minimumSalary <= 10000000

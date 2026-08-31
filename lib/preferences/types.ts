@@ -1,5 +1,4 @@
 export const WORK_ARRANGEMENTS = [
-  "any",
   "remote",
   "hybrid",
   "in_person",
@@ -7,11 +6,34 @@ export const WORK_ARRANGEMENTS = [
 
 export type WorkArrangement = (typeof WORK_ARRANGEMENTS)[number];
 
+export const WORK_ARRANGEMENT_LABELS: Record<WorkArrangement, string> = {
+  remote: "Remote",
+  hybrid: "Hybrid",
+  in_person: "In person",
+};
+
+export const EMPLOYMENT_TYPES = [
+  "contract",
+  "full_time",
+  "part_time",
+  "seasonal",
+] as const;
+
+export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
+
+export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
+  contract: "Contract",
+  full_time: "Full time",
+  part_time: "Part time",
+  seasonal: "Seasonal",
+};
+
 export type JobPreferences = {
   targetLocation: string;
   additionalLocations: string[];
   radiusMiles: number;
-  workArrangement: WorkArrangement;
+  workArrangements: readonly WorkArrangement[];
+  employmentTypes: readonly EmploymentType[];
   minimumSalary: number;
 };
 

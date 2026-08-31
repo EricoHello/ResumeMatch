@@ -1,5 +1,9 @@
 import type { ResumeProfile } from "@/lib/analysis/types";
-import type { JobPreferences } from "@/lib/preferences/types";
+import type {
+  EmploymentType,
+  JobPreferences,
+  WorkArrangement,
+} from "@/lib/preferences/types";
 
 import type { JobCandidate, JobMatch } from "./types";
 
@@ -114,18 +118,56 @@ function locationScore(candidate: JobCandidate, preferences: JobPreferences) {
   );
 }
 
+function candidateWorkArrangement(
+  candidate: JobCandidate,
+): WorkArrangement {
+  if (candidate.isRemote || candidate.workArrangement === "remote") {
+    return "remote";
+  }
+  if (candidate.workArrangement === "hybrid") return "hybrid";
+  return "in_person";
+}
+
+function workArrangementEligible(
+  candidate: JobCandidate,
+  preferences: JobPreferences,
+) {
+  return preferences.workArrangements.includes(
+    candidateWorkArrangement(candidate),
+  );
+}
+
 function workArrangementScore(
   candidate: JobCandidate,
-  preference: JobPreferences["workArrangement"],
+  preferences: JobPreferences,
 ) {
-  if (preference === "any") return candidate.isRemote ? 8 : 0;
-  if (preference === "remote") return candidate.isRemote ? 34 : -24;
-  if (candidate.workArrangement === "unknown") return 0;
-  if (preference === "hybrid") {
-    return candidate.workArrangement === "hybrid" ? 30 : -18;
+  if (preferences.workArrangements.length === 3) {
+    return candidate.isRemote ? 8 : 0;
   }
-  if (candidate.workArrangement === "in_person") return 26;
-  return candidate.workArrangement === "hybrid" ? -8 : -20;
+  return workArrangementEligible(candidate, preferences) ? 24 : 0;
+}
+
+function candidateEmploymentType(value: string | null): EmploymentType | null {
+  if (!value) return null;
+  const normalized = value.toLowerCase().replace(/[^a-z]+/g, " ").trim();
+  if (/\bseasonal\b/.test(normalized)) return "seasonal";
+  if (/\bpart ?time\b/.test(normalized)) return "part_time";
+  if (/\bfull ?time\b/.test(normalized)) return "full_time";
+  if (/\b(?:contract|contractor|freelance)\b/.test(normalized)) {
+    return "contract";
+  }
+  return null;
+}
+
+function employmentTypeEligible(
+  candidate: JobCandidate,
+  preferences: JobPreferences,
+) {
+  const employmentType = candidateEmploymentType(candidate.employmentType);
+  return (
+    employmentType !== null &&
+    preferences.employmentTypes.includes(employmentType)
+  );
 }
 
 function annualSalary(candidate: JobCandidate) {
@@ -244,10 +286,7 @@ function scoreCandidate(
   score += Math.min(24, matchedSkills.length * 6);
 
   score += locationScore(candidate, profile.preferences);
-  score += workArrangementScore(
-    candidate,
-    profile.preferences.workArrangement,
-  );
+  score += workArrangementScore(candidate, profile.preferences);
 
   const salary = annualSalary(candidate);
   const minimumDesired = profile.preferences.minimumSalary;
@@ -317,7 +356,9 @@ export function rankJobCandidatesWithDiagnostics(
     .filter(({ candidate, reasonablyRelated }) => {
       if (
         !reasonablyRelated ||
-        !locationEligible(candidate, profile.preferences)
+        !locationEligible(candidate, profile.preferences) ||
+        !workArrangementEligible(candidate, profile.preferences) ||
+        !employmentTypeEligible(candidate, profile.preferences)
       ) {
         return false;
       }
@@ -352,7 +393,7 @@ export function rankJobCandidatesByPreferencesWithDiagnostics(
   const available = candidates
     .map((candidate, index) => {
       let score = locationScore(candidate, preferences);
-      score += workArrangementScore(candidate, preferences.workArrangement);
+      score += workArrangementScore(candidate, preferences);
 
       const salary = annualSalary(candidate);
       if (
@@ -374,7 +415,13 @@ export function rankJobCandidatesByPreferencesWithDiagnostics(
     })
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .filter(({ candidate }) => {
-      if (!locationEligible(candidate, preferences)) return false;
+      if (
+        !locationEligible(candidate, preferences) ||
+        !workArrangementEligible(candidate, preferences) ||
+        !employmentTypeEligible(candidate, preferences)
+      ) {
+        return false;
+      }
       const key = normalizedText(
         `${candidate.title}|${candidate.company}|${candidate.location}`,
       );

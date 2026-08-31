@@ -22,7 +22,8 @@ const INPUT = {
     targetLocation: "Seattle, WA",
     additionalLocations: [],
     radiusMiles: 25,
-    workArrangement: "any" as const,
+    workArrangements: ["remote", "hybrid", "in_person"] as const,
+    employmentTypes: ["contract", "full_time", "part_time", "seasonal"] as const,
     minimumSalary: 140_000,
   },
 };

@@ -18,14 +18,16 @@ describe("parseJobPreferences", () => {
         targetLocation: "  San Francisco, CA  ",
         additionalLocations: ["  Oakland, CA  "],
         radiusMiles: 50,
-        workArrangement: "hybrid",
+        workArrangements: ["hybrid", "remote"],
+        employmentTypes: ["full_time", "contract"],
         minimumSalary: 150_000,
       }),
     ).toEqual({
       targetLocation: "San Francisco, CA",
       additionalLocations: ["Oakland, CA"],
       radiusMiles: 50,
-      workArrangement: "hybrid",
+      workArrangements: ["hybrid", "remote"],
+      employmentTypes: ["full_time", "contract"],
       minimumSalary: 150_000,
     });
   });
@@ -88,7 +90,8 @@ describe("parseJobPreferences", () => {
       targetLocation: "x",
       additionalLocations: [],
       radiusMiles: DEFAULT_RADIUS_MILES,
-      workArrangement: "any",
+      workArrangements: ["remote", "hybrid", "in_person"],
+      employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
       minimumSalary: 0,
     });
 
@@ -103,9 +106,54 @@ describe("parseJobPreferences", () => {
       targetLocation,
       additionalLocations: [],
       radiusMiles: DEFAULT_RADIUS_MILES,
-      workArrangement: "any",
+      workArrangements: ["remote", "hybrid", "in_person"],
+      employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
       minimumSalary: MAX_MINIMUM_SALARY,
     });
+  });
+
+  it("migrates earlier work-arrangement choices to enabled lists", () => {
+    const base = {
+      targetLocation: "Seattle",
+      additionalLocations: [],
+      radiusMiles: DEFAULT_RADIUS_MILES,
+      employmentTypes: ["full_time"],
+      minimumSalary: 100_000,
+    };
+
+    expect(
+      parseJobPreferences({ ...base, workArrangement: "any" }).workArrangements,
+    ).toEqual(["remote", "hybrid", "in_person"]);
+    expect(
+      parseJobPreferences({ ...base, workArrangement: "hybrid" })
+        .workArrangements,
+    ).toEqual(["hybrid"]);
+  });
+
+  it("allows every employment type to be disabled", () => {
+    expect(
+      parseJobPreferences({
+        targetLocation: "Seattle",
+        additionalLocations: [],
+        radiusMiles: DEFAULT_RADIUS_MILES,
+        workArrangements: ["remote", "hybrid", "in_person"],
+        employmentTypes: [],
+        minimumSalary: 100_000,
+      }).employmentTypes,
+    ).toEqual([]);
+  });
+
+  it("allows every work arrangement to be disabled", () => {
+    expect(
+      parseJobPreferences({
+        targetLocation: "Seattle",
+        additionalLocations: [],
+        radiusMiles: DEFAULT_RADIUS_MILES,
+        workArrangements: [],
+        employmentTypes: ["full_time"],
+        minimumSalary: 100_000,
+      }).workArrangements,
+    ).toEqual([]);
   });
 
   it.each([
@@ -115,14 +163,20 @@ describe("parseJobPreferences", () => {
     { radiusMiles: MIN_RADIUS_MILES - 1 },
     { radiusMiles: MAX_RADIUS_MILES + 1 },
     { radiusMiles: 25.5 },
-    { workArrangement: "sometimes" },
+    { workArrangements: "remote" },
+    { workArrangements: ["sometimes"] },
+    { workArrangements: ["remote", "remote"] },
+    { employmentTypes: "full_time" },
+    { employmentTypes: ["intern"] },
+    { employmentTypes: ["full_time", "full_time"] },
   ])("rejects invalid expanded filters: %j", (override) => {
     expect(() =>
       parseJobPreferences({
         targetLocation: "Seattle",
         additionalLocations: [],
         radiusMiles: DEFAULT_RADIUS_MILES,
-        workArrangement: "any",
+        workArrangements: ["remote", "hybrid", "in_person"],
+        employmentTypes: ["full_time"],
         minimumSalary: 100_000,
         ...override,
       }),

@@ -14,7 +14,8 @@ const PREFERENCES = {
   targetLocation: "Seattle, WA",
   additionalLocations: [],
   radiusMiles: 25,
-  workArrangement: "any",
+  workArrangements: ["remote", "hybrid", "in_person"],
+  employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
   minimumSalary: 140_000,
 };
 const GENERATED_ANALYSIS = {
@@ -35,7 +36,8 @@ describe("parseAnalyzeResumeRequest", () => {
           targetLocation: "  Seattle, WA  ",
           additionalLocations: [],
           radiusMiles: 25,
-          workArrangement: "any",
+          workArrangements: ["remote", "hybrid", "in_person"],
+          employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
           minimumSalary: 140_000,
         },
       }),

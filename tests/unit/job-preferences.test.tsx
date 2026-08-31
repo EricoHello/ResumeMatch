@@ -17,7 +17,8 @@ const SAVED_PREFERENCES = {
   targetLocation: "Seattle, WA",
   additionalLocations: [],
   radiusMiles: 25,
-  workArrangement: "any" as const,
+  workArrangements: ["remote", "hybrid", "in_person"] as const,
+  employmentTypes: ["contract", "full_time", "part_time", "seasonal"] as const,
   minimumSalary: 120_000,
 };
 
@@ -75,6 +76,11 @@ describe("JobPreferences", () => {
       await screen.findByDisplayValue(SAVED_PREFERENCES.targetLocation),
     ).toBeTruthy();
     expect(screen.getByDisplayValue("120000")).toBeTruthy();
+    expect(screen.queryByRole("radio", { name: "Any" })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Remote" })).toHaveProperty(
+      "checked",
+      true,
+    );
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/preferences",
       expect.objectContaining({
@@ -107,7 +113,8 @@ describe("JobPreferences", () => {
       ...SAVED_PREFERENCES,
       additionalLocations: ["Portland, OR"],
       radiusMiles: 50,
-      workArrangement: "hybrid" as const,
+      workArrangements: ["hybrid"] as const,
+      employmentTypes: ["contract", "full_time"] as const,
       minimumSalary: 135_000,
     };
     fetchMock
@@ -133,7 +140,10 @@ describe("JobPreferences", () => {
     fireEvent.change(screen.getByLabelText("Search radius"), {
       target: { value: "50" },
     });
-    fireEvent.click(screen.getByRole("radio", { name: "Hybrid" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Remote" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "In person" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Part time" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Seasonal" }));
     fireEvent.change(salary, { target: { value: "135000" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
@@ -181,7 +191,8 @@ describe("JobPreferences", () => {
         targetLocation: "Remote",
         additionalLocations: [],
         radiusMiles: 25,
-        workArrangement: "any",
+        workArrangements: ["remote", "hybrid", "in_person"],
+        employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
         minimumSalary: 99000,
       }),
     );

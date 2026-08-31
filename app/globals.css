@@ -1201,7 +1201,7 @@ input:disabled {
 
 .field > label,
 .field-label,
-.work-arrangement-field legend {
+.preference-options-field legend {
   color: #364056;
   font-size: 12px;
   font-weight: 750;
@@ -1264,7 +1264,7 @@ input:disabled {
   text-underline-offset: 3px;
 }
 
-.work-arrangement-field {
+.preference-options-field {
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -1275,6 +1275,10 @@ input:disabled {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 9px;
+}
+
+.work-arrangement-options--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .work-arrangement-options label {
@@ -2040,7 +2044,7 @@ input:disabled {
 
 :root[data-theme="dark"] .field > label,
 :root[data-theme="dark"] .field-label,
-:root[data-theme="dark"] .work-arrangement-field legend,
+:root[data-theme="dark"] .preference-options-field legend,
 :root[data-theme="dark"] .analysis-loading p,
 :root[data-theme="dark"] .profile-summary p,
 :root[data-theme="dark"] .profile-facts dd,

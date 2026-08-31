@@ -19,7 +19,8 @@ const PROFILE: ResumeProfile = {
     targetLocation: "Seattle, WA",
     additionalLocations: [],
     radiusMiles: 25,
-    workArrangement: "any",
+    workArrangements: ["remote", "hybrid", "in_person"],
+    employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
     minimumSalary: 145_000,
   },
 };
@@ -125,6 +126,55 @@ describe("rankJobCandidates", () => {
     ]);
   });
 
+  it("keeps every enabled employment type and filters disabled types", () => {
+    const profile: ResumeProfile = {
+      ...PROFILE,
+      preferences: {
+        ...PROFILE.preferences,
+        employmentTypes: ["contract", "seasonal"],
+      },
+    };
+
+    const matches = rankJobCandidates(
+      [
+        candidate("contract", { employmentType: "CONTRACTOR" }),
+        candidate("seasonal", { employmentType: "Seasonal" }),
+        candidate("full-time", { employmentType: "FULLTIME" }),
+        candidate("part-time", { employmentType: "Part-time" }),
+      ],
+      profile,
+      now,
+    );
+
+    expect(matches.map((job) => job.id)).toEqual(["contract", "seasonal"]);
+  });
+
+  it("keeps every enabled work arrangement and filters disabled ones", () => {
+    const profile: ResumeProfile = {
+      ...PROFILE,
+      preferences: {
+        ...PROFILE.preferences,
+        workArrangements: ["remote", "hybrid"],
+      },
+    };
+
+    const matches = rankJobCandidates(
+      [
+        candidate("remote", {
+          isRemote: true,
+          workArrangement: "remote",
+        }),
+        candidate("hybrid", { workArrangement: "hybrid" }),
+        candidate("in-person", { workArrangement: "in_person" }),
+        candidate("unlabeled-in-person", { workArrangement: "unknown" }),
+      ],
+      profile,
+      now,
+    );
+
+    expect(matches.map((job) => job.id)).toEqual(["remote", "hybrid"]);
+  });
+
   it("returns a reasonably related imperfect job without a score threshold", () => {
     const productProfile: ResumeProfile = {
       ...PROFILE,
@@ -136,7 +186,8 @@ describe("rankJobCandidates", () => {
         targetLocation: "Remote",
         additionalLocations: [],
         radiusMiles: 25,
-        workArrangement: "remote",
+        workArrangements: ["remote"],
+        employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
         minimumSalary: 180_000,
       },
     };

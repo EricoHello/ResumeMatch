@@ -32,7 +32,8 @@ const PREFERENCES = {
   targetLocation: "Austin, TX",
   additionalLocations: [],
   radiusMiles: 25,
-  workArrangement: "any",
+  workArrangements: ["remote", "hybrid", "in_person"],
+  employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
   minimumSalary: 110_000,
 };
 
@@ -163,7 +164,8 @@ describe("PUT /api/preferences", () => {
           targetLocation: "  Austin, TX  ",
           additionalLocations: [],
           radiusMiles: 25,
-          workArrangement: "any",
+          workArrangements: ["remote", "hybrid", "in_person"],
+          employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
           minimumSalary: 110_000,
         }),
       }),

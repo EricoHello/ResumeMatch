@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ResumeProfile } from "@/lib/analysis/types";
+import {
+  EMPLOYMENT_TYPE_LABELS,
+  WORK_ARRANGEMENT_LABELS,
+} from "@/lib/preferences/types";
 
 export type ResumeAnalysisState =
   | { status: "loading" }
@@ -181,14 +185,26 @@ export function ResumeAnalysis({
                 </dd>
               </div>
               <div>
+                <dt>Work arrangement</dt>
+                <dd>
+                  {state.profile.preferences.workArrangements.length
+                    ? state.profile.preferences.workArrangements
+                        .map(
+                          (arrangement) =>
+                            WORK_ARRANGEMENT_LABELS[arrangement],
+                        )
+                        .join(", ")
+                    : "None selected"}
+                </dd>
+              </div>
+              <div>
                 <dt>Type of job</dt>
                 <dd>
-                  {{
-                    any: "Any",
-                    remote: "Remote",
-                    hybrid: "Hybrid",
-                    in_person: "In person",
-                  }[state.profile.preferences.workArrangement]}
+                  {state.profile.preferences.employmentTypes.length
+                    ? state.profile.preferences.employmentTypes
+                        .map((type) => EMPLOYMENT_TYPE_LABELS[type])
+                        .join(", ")
+                    : "None selected"}
                 </dd>
               </div>
               <div>

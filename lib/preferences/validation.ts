@@ -1,16 +1,34 @@
 import {
+  EMPLOYMENT_TYPES,
   WORK_ARRANGEMENTS,
+  type EmploymentType,
   type JobPreferences,
   type WorkArrangement,
 } from "./types";
 
 const LEGACY_PREFERENCE_KEYS = ["minimumSalary", "targetLocation"] as const;
-const PREFERENCE_KEYS = [
+const VERSION_TWO_PREFERENCE_KEYS = [
   "additionalLocations",
   "minimumSalary",
   "radiusMiles",
   "targetLocation",
   "workArrangement",
+] as const;
+const VERSION_THREE_PREFERENCE_KEYS = [
+  "additionalLocations",
+  "employmentTypes",
+  "minimumSalary",
+  "radiusMiles",
+  "targetLocation",
+  "workArrangement",
+] as const;
+const PREFERENCE_KEYS = [
+  "additionalLocations",
+  "employmentTypes",
+  "minimumSalary",
+  "radiusMiles",
+  "targetLocation",
+  "workArrangements",
 ] as const;
 
 export const MAX_TARGET_LOCATION_LENGTH = 120;
@@ -19,6 +37,10 @@ export const DEFAULT_RADIUS_MILES = 25;
 export const MIN_RADIUS_MILES = 5;
 export const MAX_RADIUS_MILES = 100;
 export const MAX_ADDITIONAL_LOCATIONS = 3;
+export const DEFAULT_WORK_ARRANGEMENTS: WorkArrangement[] = [
+  ...WORK_ARRANGEMENTS,
+];
+export const DEFAULT_EMPLOYMENT_TYPES: EmploymentType[] = [...EMPLOYMENT_TYPES];
 
 export class PreferencesValidationError extends Error {
   constructor(message: string) {
@@ -43,13 +65,19 @@ export function parseJobPreferences(value: unknown): JobPreferences {
   const isLegacy =
     keys.length === LEGACY_PREFERENCE_KEYS.length &&
     LEGACY_PREFERENCE_KEYS.every((key, index) => keys[index] === key);
+  const isVersionTwo =
+    keys.length === VERSION_TWO_PREFERENCE_KEYS.length &&
+    VERSION_TWO_PREFERENCE_KEYS.every((key, index) => keys[index] === key);
+  const isVersionThree =
+    keys.length === VERSION_THREE_PREFERENCE_KEYS.length &&
+    VERSION_THREE_PREFERENCE_KEYS.every((key, index) => keys[index] === key);
   const isCurrent =
     keys.length === PREFERENCE_KEYS.length &&
     PREFERENCE_KEYS.every((key, index) => keys[index] === key);
 
-  if (!isLegacy && !isCurrent) {
+  if (!isLegacy && !isVersionTwo && !isVersionThree && !isCurrent) {
     throw new PreferencesValidationError(
-      "Include exactly targetLocation, additionalLocations, radiusMiles, workArrangement, and minimumSalary.",
+      "Include exactly targetLocation, additionalLocations, radiusMiles, workArrangements, employmentTypes, and minimumSalary.",
     );
   }
 
@@ -89,7 +117,10 @@ export function parseJobPreferences(value: unknown): JobPreferences {
       targetLocation,
       additionalLocations: [],
       radiusMiles: DEFAULT_RADIUS_MILES,
-      workArrangement: /\bremote\b/i.test(targetLocation) ? "remote" : "any",
+      workArrangements: /\bremote\b/i.test(targetLocation)
+        ? ["remote"]
+        : [...DEFAULT_WORK_ARRANGEMENTS],
+      employmentTypes: [...DEFAULT_EMPLOYMENT_TYPES],
       minimumSalary,
     };
   }
@@ -144,20 +175,80 @@ export function parseJobPreferences(value: unknown): JobPreferences {
     );
   }
 
-  if (
-    typeof value.workArrangement !== "string" ||
-    !WORK_ARRANGEMENTS.includes(value.workArrangement as WorkArrangement)
-  ) {
-    throw new PreferencesValidationError(
-      "Job type must be any, remote, hybrid, or in person.",
-    );
+  let workArrangements: WorkArrangement[];
+  if (isCurrent) {
+    if (!Array.isArray(value.workArrangements)) {
+      throw new PreferencesValidationError("Work arrangements must be a list.");
+    }
+
+    workArrangements = value.workArrangements.map((workArrangement) => {
+      if (
+        typeof workArrangement !== "string" ||
+        !WORK_ARRANGEMENTS.includes(workArrangement as WorkArrangement)
+      ) {
+        throw new PreferencesValidationError(
+          "Work arrangements can only include remote, hybrid, or in person.",
+        );
+      }
+      return workArrangement as WorkArrangement;
+    });
+
+    if (new Set(workArrangements).size !== workArrangements.length) {
+      throw new PreferencesValidationError(
+        "Each work arrangement can only be included once.",
+      );
+    }
+  } else {
+    if (
+      typeof value.workArrangement !== "string" ||
+      (value.workArrangement !== "any" &&
+        !WORK_ARRANGEMENTS.includes(value.workArrangement as WorkArrangement))
+    ) {
+      throw new PreferencesValidationError(
+        "Work arrangement must be any, remote, hybrid, or in person.",
+      );
+    }
+    workArrangements =
+      value.workArrangement === "any"
+        ? [...DEFAULT_WORK_ARRANGEMENTS]
+        : [value.workArrangement as WorkArrangement];
+  }
+
+  let employmentTypes: EmploymentType[];
+  if (isVersionTwo) {
+    employmentTypes = [...DEFAULT_EMPLOYMENT_TYPES];
+  } else {
+    if (!Array.isArray(value.employmentTypes)) {
+      throw new PreferencesValidationError(
+        "Employment types must be a list.",
+      );
+    }
+
+    employmentTypes = value.employmentTypes.map((employmentType) => {
+      if (
+        typeof employmentType !== "string" ||
+        !EMPLOYMENT_TYPES.includes(employmentType as EmploymentType)
+      ) {
+        throw new PreferencesValidationError(
+          "Employment types can only include contract, full time, part time, or seasonal.",
+        );
+      }
+      return employmentType as EmploymentType;
+    });
+
+    if (new Set(employmentTypes).size !== employmentTypes.length) {
+      throw new PreferencesValidationError(
+        "Each employment type can only be included once.",
+      );
+    }
   }
 
   return {
     targetLocation,
     additionalLocations,
     radiusMiles,
-    workArrangement: value.workArrangement as WorkArrangement,
+    workArrangements,
+    employmentTypes,
     minimumSalary,
   };
 }

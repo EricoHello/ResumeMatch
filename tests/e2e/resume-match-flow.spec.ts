@@ -60,7 +60,13 @@ type AnalysisPreferences = {
   targetLocation: string;
   additionalLocations: string[];
   radiusMiles: number;
-  workArrangement: "any" | "remote" | "hybrid" | "in_person";
+  workArrangements: ("remote" | "hybrid" | "in_person")[];
+  employmentTypes: (
+    | "contract"
+    | "full_time"
+    | "part_time"
+    | "seasonal"
+  )[];
   minimumSalary: number;
 };
 
@@ -278,7 +284,8 @@ test("completes analysis and one live search for three guest job matches", async
     targetLocation: "Seattle, WA",
     additionalLocations: ["Portland, OR"],
     radiusMiles: 50,
-    workArrangement: "hybrid",
+    workArrangements: ["hybrid"],
+    employmentTypes: ["contract", "full_time"],
     minimumSalary: 145000,
   });
 
@@ -301,7 +308,10 @@ test("completes analysis and one live search for three guest job matches", async
   for (let step = 0; step < 5; step += 1) {
     await page.getByLabel("Search radius").press("ArrowRight");
   }
-  await page.getByRole("radio", { name: "Hybrid" }).check();
+  await page.getByRole("checkbox", { name: "Remote" }).uncheck();
+  await page.getByRole("checkbox", { name: "In person" }).uncheck();
+  await page.getByRole("checkbox", { name: "Part time" }).uncheck();
+  await page.getByRole("checkbox", { name: "Seasonal" }).uncheck();
   await page.getByLabel("Minimum acceptable salary").fill("145000");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
 
@@ -355,7 +365,8 @@ test("completes analysis and one live search for three guest job matches", async
       targetLocation: "Seattle, WA",
       additionalLocations: ["Portland, OR"],
       radiusMiles: 50,
-      workArrangement: "hybrid",
+      workArrangements: ["hybrid"],
+      employmentTypes: ["contract", "full_time"],
       minimumSalary: 145000,
     },
   });
@@ -401,7 +412,8 @@ test("completes analysis and one live search for three guest job matches", async
       targetLocation: "Seattle, WA",
       additionalLocations: ["Portland, OR"],
       radiusMiles: 50,
-      workArrangement: "hybrid",
+      workArrangements: ["hybrid"],
+      employmentTypes: ["contract", "full_time"],
       minimumSalary: 145000,
     }),
   });
@@ -489,7 +501,8 @@ test("shows a safe analysis error and retries the request", async ({ page }) => 
           targetLocation: "Remote",
           additionalLocations: [],
           radiusMiles: 25,
-          workArrangement: "any",
+          workArrangements: ["remote", "hybrid", "in_person"],
+          employmentTypes: ["contract", "full_time", "part_time", "seasonal"],
           minimumSalary: 125000,
         }),
       }),

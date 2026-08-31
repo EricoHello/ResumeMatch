@@ -13,7 +13,11 @@ import {
   saveGuestPreferences,
 } from "@/lib/session/guest-session";
 import {
+  EMPLOYMENT_TYPE_LABELS,
+  EMPLOYMENT_TYPES,
+  WORK_ARRANGEMENT_LABELS,
   WORK_ARRANGEMENTS,
+  type EmploymentType,
   type JobPreferences as JobPreferencesValue,
   type WorkArrangement,
 } from "@/lib/preferences/types";
@@ -44,7 +48,16 @@ function samePreferences(
   return (
     first?.targetLocation === second.targetLocation &&
     first.radiusMiles === second.radiusMiles &&
-    first.workArrangement === second.workArrangement &&
+    first.workArrangements.length === second.workArrangements.length &&
+    first.workArrangements.every(
+      (workArrangement, index) =>
+        workArrangement === second.workArrangements[index],
+    ) &&
+    first.employmentTypes.length === second.employmentTypes.length &&
+    first.employmentTypes.every(
+      (employmentType, index) =>
+        employmentType === second.employmentTypes[index],
+    ) &&
     first.additionalLocations.length === second.additionalLocations.length &&
     first.additionalLocations.every(
       (location, index) => location === second.additionalLocations[index],
@@ -113,8 +126,15 @@ export function JobPreferences({
   const [radiusMiles, setRadiusMiles] = useState(
     guestPreferences?.radiusMiles ?? DEFAULT_RADIUS_MILES,
   );
-  const [workArrangement, setWorkArrangement] = useState<WorkArrangement>(
-    guestPreferences?.workArrangement ?? "any",
+  const [workArrangements, setWorkArrangements] = useState<WorkArrangement[]>(
+    guestPreferences
+      ? [...guestPreferences.workArrangements]
+      : [...WORK_ARRANGEMENTS],
+  );
+  const [employmentTypes, setEmploymentTypes] = useState<EmploymentType[]>(
+    guestPreferences
+      ? [...guestPreferences.employmentTypes]
+      : [...EMPLOYMENT_TYPES],
   );
   const [minimumSalary, setMinimumSalary] = useState(
     guestPreferences ? String(guestPreferences.minimumSalary) : "",
@@ -173,7 +193,8 @@ export function JobPreferences({
         setTargetLocation(preferences.targetLocation);
         setAdditionalLocations(preferences.additionalLocations);
         setRadiusMiles(preferences.radiusMiles);
-        setWorkArrangement(preferences.workArrangement);
+        setWorkArrangements([...preferences.workArrangements]);
+        setEmploymentTypes([...preferences.employmentTypes]);
         setMinimumSalary(String(preferences.minimumSalary));
       }
       setLoadState("ready");
@@ -188,7 +209,18 @@ export function JobPreferences({
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
     }
-  }, [signedInUser]);
+  }, [
+    signedInUser,
+    setAdditionalLocations,
+    setEmploymentTypes,
+    setLastSaved,
+    setLoadState,
+    setMessage,
+    setMinimumSalary,
+    setRadiusMiles,
+    setTargetLocation,
+    setWorkArrangements,
+  ]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -261,7 +293,8 @@ export function JobPreferences({
       targetLocation: normalizedLocation,
       additionalLocations: normalizedAdditionalLocations,
       radiusMiles,
-      workArrangement,
+      workArrangements,
+      employmentTypes,
       minimumSalary: normalizedSalary,
     };
 
@@ -324,7 +357,8 @@ export function JobPreferences({
       setTargetLocation(savedPreferences.targetLocation);
       setAdditionalLocations(savedPreferences.additionalLocations);
       setRadiusMiles(savedPreferences.radiusMiles);
-      setWorkArrangement(savedPreferences.workArrangement);
+      setWorkArrangements([...savedPreferences.workArrangements]);
+      setEmploymentTypes([...savedPreferences.employmentTypes]);
       setMinimumSalary(String(savedPreferences.minimumSalary));
       setLastSaved(savedPreferences);
       setSaveState("idle");
@@ -351,7 +385,8 @@ export function JobPreferences({
             .map((location) => location.trim())
             .filter(Boolean),
           radiusMiles,
-          workArrangement,
+          workArrangements,
+          employmentTypes,
           minimumSalary: Number(minimumSalary),
         }
       : null;
@@ -369,7 +404,7 @@ export function JobPreferences({
             Job preferences
           </h2>
         </div>
-        <span className="format-badge">4 filters</span>
+        <span className="format-badge">5 filters</span>
       </div>
 
       <p className="preference-intro">
@@ -515,33 +550,73 @@ export function JobPreferences({
           ))}
         </div>
 
-        <fieldset className="field preference-wide-field work-arrangement-field">
+        <fieldset className="field preference-wide-field preference-options-field">
+          <legend>Work arrangement</legend>
+          <small className="field-help">
+            Turn off any work arrangements you don’t want to see.
+          </small>
+          <div className="work-arrangement-options work-arrangement-options--three">
+            {WORK_ARRANGEMENTS.map((option) => (
+              <label key={option}>
+                <input
+                  type="checkbox"
+                  name="workArrangements"
+                  value={option}
+                  checked={workArrangements.includes(option)}
+                  disabled={fieldsDisabled}
+                  onChange={(event) => {
+                    setWorkArrangements((selected) =>
+                      event.target.checked
+                        ? WORK_ARRANGEMENTS.filter(
+                            (workArrangement) =>
+                              workArrangement === option ||
+                              selected.includes(workArrangement),
+                          )
+                        : selected.filter(
+                            (workArrangement) => workArrangement !== option,
+                          ),
+                    );
+                    markChanged();
+                  }}
+                />
+                <span>{WORK_ARRANGEMENT_LABELS[option]}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="field preference-wide-field preference-options-field">
           <legend>Type of job</legend>
+          <small className="field-help">
+            Turn off any job types you don’t want to see.
+          </small>
           <div className="work-arrangement-options">
-            {WORK_ARRANGEMENTS.map((option) => {
-              const labels: Record<WorkArrangement, string> = {
-                any: "Any",
-                remote: "Remote",
-                hybrid: "Hybrid",
-                in_person: "In person",
-              };
-              return (
-                <label key={option}>
-                  <input
-                    type="radio"
-                    name="workArrangement"
-                    value={option}
-                    checked={workArrangement === option}
-                    disabled={fieldsDisabled}
-                    onChange={() => {
-                      setWorkArrangement(option);
-                      markChanged();
-                    }}
-                  />
-                  <span>{labels[option]}</span>
-                </label>
-              );
-            })}
+            {EMPLOYMENT_TYPES.map((option) => (
+              <label key={option}>
+                <input
+                  type="checkbox"
+                  name="employmentTypes"
+                  value={option}
+                  checked={employmentTypes.includes(option)}
+                  disabled={fieldsDisabled}
+                  onChange={(event) => {
+                    setEmploymentTypes((selected) =>
+                      event.target.checked
+                        ? EMPLOYMENT_TYPES.filter(
+                            (employmentType) =>
+                              employmentType === option ||
+                              selected.includes(employmentType),
+                          )
+                        : selected.filter(
+                            (employmentType) => employmentType !== option,
+                          ),
+                    );
+                    markChanged();
+                  }}
+                />
+                <span>{EMPLOYMENT_TYPE_LABELS[option]}</span>
+              </label>
+            ))}
           </div>
         </fieldset>
 

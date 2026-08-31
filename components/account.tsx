@@ -5,7 +5,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { PreferenceIdentity } from "@/components/job-preferences";
 import type { ResumeProfile } from "@/lib/analysis/types";
-import type { JobPreferences } from "@/lib/preferences/types";
+import {
+  EMPLOYMENT_TYPE_LABELS,
+  WORK_ARRANGEMENT_LABELS,
+  type JobPreferences,
+} from "@/lib/preferences/types";
 import { parseJobPreferences } from "@/lib/preferences/validation";
 import { readGuestSession } from "@/lib/session/guest-session";
 
@@ -106,13 +110,6 @@ function PreferencesSummary({
     return <p className="account-empty">{emptyMessage}</p>;
   }
 
-  const arrangementLabels = {
-    any: "Any",
-    remote: "Remote",
-    hybrid: "Hybrid",
-    in_person: "In person",
-  } as const;
-
   return (
     <dl className="account-facts">
       <div>
@@ -126,8 +123,24 @@ function PreferencesSummary({
         <dd>{preferences.radiusMiles} miles</dd>
       </div>
       <div>
+        <dt>Work arrangement</dt>
+        <dd>
+          {preferences.workArrangements.length
+            ? preferences.workArrangements
+                .map((arrangement) => WORK_ARRANGEMENT_LABELS[arrangement])
+                .join(", ")
+            : "None selected"}
+        </dd>
+      </div>
+      <div>
         <dt>Type of job</dt>
-        <dd>{arrangementLabels[preferences.workArrangement]}</dd>
+        <dd>
+          {preferences.employmentTypes.length
+            ? preferences.employmentTypes
+                .map((type) => EMPLOYMENT_TYPE_LABELS[type])
+                .join(", ")
+            : "None selected"}
+        </dd>
       </div>
       <div>
         <dt>Minimum salary</dt>
