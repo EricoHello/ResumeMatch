@@ -59,9 +59,37 @@ If this document does not exist, `saveResumeData` defaults to `true`. When it is
 
 Guest preferences are stored in browser `sessionStorage`. Guest resume text and profiles stay in the current page session and are never written to Firestore.
 
+## Points and rewards
+
+```text
+users/{uid}
+  points: {
+    schemaVersion: 1,
+    balance: number,
+    totalEarned: number,
+    totalSpent: number,
+    updatedAt: timestamp
+  }
+
+users/{uid}/pointHistory/{sha256(kind + idempotencyKey)}
+  schemaVersion: 1
+  kind: "earn" | "spend"
+  action: string
+  amount: number
+  description: string
+  idempotencyKey: string
+  timestamp: timestamp
+```
+
+`earnPoints` and `spendPoints` are server-only functions. Each mutation runs in one Firestore transaction so the aggregate balance and ledger cannot diverge. The deterministic history document ID makes a stable action occurrence safe to retry; reusing its idempotency key returns the original event without applying the amount again. Ordinary spends require enough balance. A trusted post-paid operation may explicitly allow a negative balance, but no current feature does so.
+
+`GET /api/points` returns the authenticated user's aggregate totals and 50 most recent history entries. It does not expose a generic mutation endpoint.
+
+Guest points use session storage plus an in-memory fallback and are cleared with the guest session. They are never written to Firestore.
+
 ## Account data actions
 
-`POST /api/account/data` reads the current preference, saved-resume, and privacy documents, builds a JSON export containing `savedPreferences`, `extractedResumeText`, `aiCandidateProfile`, and `privacySettings`, and emails it only to the verified email address in the authenticated Firebase token. The client cannot provide or override the recipient.
+`POST /api/account/data` reads the current preference, saved-resume, privacy, and points data, builds a JSON export containing `savedPreferences`, `extractedResumeText`, `aiCandidateProfile`, `privacySettings`, and `points`, and emails it only to the verified email address in the authenticated Firebase token. The client cannot provide or override the recipient.
 
 `DELETE /api/resumes/saved` deletes only `users/{uid}/resumeProfiles/current`. It is used when a user turns resume saving off and chooses to remove the previously stored resume text and AI profile. Preferences and the privacy setting are not deleted.
 
@@ -69,9 +97,9 @@ Guest preferences are stored in browser `sessionStorage`. Guest resume text and 
 
 ## Security boundary
 
-- Preference, saved-resume, privacy-setting, export, and deletion API calls require a verified Firebase ID token.
+- Preference, saved-resume, privacy-setting, points, export, and deletion API calls require a verified Firebase ID token.
 - The UID always comes from the verified token, never request JSON, query parameters, or a browser-selected path.
 - Data exports require a verified email claim and use it as the sole recipient.
 - The preference, privacy-setting, and saved-resume APIs apply strict schema and size validation.
-- Firestore rules allow owner-scoped reads of preferences but keep resume profiles server-managed; unmatched paths are denied.
+- Firestore rules allow owner-scoped reads of preferences, point aggregates, and point history. Point writes and resume profiles remain server-managed; unmatched paths are denied.
 - Firebase Admin operations bypass Firestore rules, so API authentication, validation, and exact path construction remain mandatory.

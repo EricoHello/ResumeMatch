@@ -42,13 +42,17 @@ import { DELETE, POST } from "@/app/api/account/data/route";
 const USER_ID = "verified-user";
 const AUTHENTICATED_EMAIL = "owner@example.test";
 const DATA_EXPORT = {
-  schemaVersion: 2 as const,
+  schemaVersion: 3 as const,
   generatedAt: "2026-08-30T12:00:00.000Z",
   data: {
     savedPreferences: null,
     extractedResumeText: "Stored resume text for the authenticated user.",
     aiCandidateProfile: null,
     privacySettings: { saveResumeData: true },
+    points: {
+      points: { balance: 0, totalEarned: 0, totalSpent: 0 },
+      history: [],
+    },
   },
 };
 

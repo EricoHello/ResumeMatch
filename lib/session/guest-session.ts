@@ -1,5 +1,6 @@
 import type { JobPreferences } from "@/lib/preferences/types";
 import { parseJobPreferences } from "@/lib/preferences/validation";
+import { clearGuestPoints } from "@/lib/points/guest";
 
 export type GuestPreferences = JobPreferences;
 
@@ -82,6 +83,7 @@ export function saveGuestPreferences(preferences: GuestPreferences) {
 
 export function clearGuestSession() {
   memorySession = null;
+  clearGuestPoints();
   if (typeof window === "undefined") return;
   try {
     window.sessionStorage.removeItem(SESSION_KEY);

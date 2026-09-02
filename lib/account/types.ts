@@ -1,15 +1,17 @@
 import type { ResumeProfile } from "@/lib/analysis/types";
+import type { PointAccountSnapshot } from "@/lib/points/types";
 import type { JobPreferences } from "@/lib/preferences/types";
 import type { ResumePrivacySettings } from "@/lib/privacy/types";
 
 export type ResumeMatchDataExport = {
-  schemaVersion: 2;
+  schemaVersion: 3;
   generatedAt: string;
   data: {
     savedPreferences: JobPreferences | null;
     extractedResumeText: string | null;
     aiCandidateProfile: ResumeProfile | null;
     privacySettings: ResumePrivacySettings;
+    points: PointAccountSnapshot;
   };
 };
 

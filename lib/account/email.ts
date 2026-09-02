@@ -51,7 +51,7 @@ export class ResendAccountDataEmailSender {
           subject: "Your ResumeMatch data",
           text: [
             "Here is the copy of the data currently stored in your ResumeMatch account.",
-            "The attached JSON file contains your saved preferences, extracted resume text, AI candidate profile, and resume privacy setting.",
+            "The attached JSON file contains your saved preferences, extracted resume text, AI candidate profile, resume privacy setting, point totals, and point history.",
             "If you did not request this email, secure your Google account and contact ResumeMatch support.",
           ].join("\n\n"),
           attachments: [

@@ -295,6 +295,82 @@ describe("Firestore job-preference rules", () => {
     await assertFails(deleteDoc(profileRef));
   });
 
+  it("allows owners to read point totals and history but denies browser writes", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      const firestore = context.firestore();
+      await setDoc(doc(firestore, "users/alice"), {
+        points: {
+          schemaVersion: 1,
+          balance: 10,
+          totalEarned: 15,
+          totalSpent: 5,
+          updatedAt: Timestamp.fromMillis(1_750_000_000_000),
+        },
+      });
+      await setDoc(
+        doc(firestore, "users/alice/pointHistory/award-1"),
+        {
+          schemaVersion: 1,
+          kind: "earn",
+          action: "test_action",
+          amount: 15,
+          description: "Test award",
+          idempotencyKey: "test:award-1",
+          timestamp: Timestamp.fromMillis(1_750_000_000_000),
+        },
+      );
+    });
+
+    const aliceDb = testEnvironment.authenticatedContext("alice").firestore();
+    const userRef = doc(aliceDb, "users/alice");
+    const entryRef = doc(aliceDb, "users/alice/pointHistory/award-1");
+
+    await assertSucceeds(getDoc(userRef));
+    await assertSucceeds(getDoc(entryRef));
+    await assertSucceeds(
+      getDocs(collection(aliceDb, "users/alice/pointHistory")),
+    );
+    await assertFails(
+      updateDoc(userRef, { "points.balance": 10_000 }),
+    );
+    await assertFails(
+      setDoc(doc(aliceDb, "users/alice/pointHistory/fake"), {
+        amount: 10_000,
+      }),
+    );
+    await assertFails(deleteDoc(entryRef));
+  });
+
+  it("denies guest and cross-user reads of point data", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), "users/alice"), {
+        points: {
+          schemaVersion: 1,
+          balance: 0,
+          totalEarned: 0,
+          totalSpent: 0,
+          updatedAt: Timestamp.fromMillis(1_750_000_000_000),
+        },
+      });
+      await setDoc(
+        doc(context.firestore(), "users/alice/pointHistory/award-1"),
+        { amount: 10 },
+      );
+    });
+
+    const anonymousDb = testEnvironment.unauthenticatedContext().firestore();
+    const bobDb = testEnvironment.authenticatedContext("bob").firestore();
+
+    await assertFails(getDoc(doc(anonymousDb, "users/alice")));
+    await assertFails(
+      getDocs(collection(anonymousDb, "users/alice/pointHistory")),
+    );
+    await assertFails(getDoc(doc(bobDb, "users/alice")));
+    await assertFails(
+      getDocs(collection(bobDb, "users/alice/pointHistory")),
+    );
+  });
+
   it("denies documents outside the explicitly allowed preference path", async () => {
     const aliceDb = testEnvironment.authenticatedContext("alice").firestore();
 
