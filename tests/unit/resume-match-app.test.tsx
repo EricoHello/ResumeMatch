@@ -25,6 +25,11 @@ const analysisMocks = vi.hoisted(() => ({
   analyze: vi.fn(),
 }));
 
+const privacyMocks = vi.hoisted(() => ({
+  load: vi.fn(),
+  save: vi.fn(),
+}));
+
 vi.mock("firebase/auth", () => ({
   browserLocalPersistence: { name: "browser-local" },
   onAuthStateChanged: authMocks.onAuthStateChanged,
@@ -47,6 +52,12 @@ vi.mock("@/lib/session/guest-session", () => ({
 vi.mock("@/lib/resume/saved-client", () => ({
   loadSavedResume: savedResumeMocks.load,
   saveSavedResume: savedResumeMocks.save,
+  deleteSavedResume: vi.fn(),
+}));
+
+vi.mock("@/lib/privacy/client", () => ({
+  loadResumePrivacySettings: privacyMocks.load,
+  saveResumePrivacySettings: privacyMocks.save,
 }));
 
 vi.mock("@/lib/analysis/client", () => ({
@@ -164,8 +175,17 @@ describe("ResumeMatchApp authentication recovery", () => {
     savedResumeMocks.load.mockReset();
     savedResumeMocks.save.mockReset();
     analysisMocks.analyze.mockReset();
+    privacyMocks.load.mockReset();
+    privacyMocks.save.mockReset();
     savedResumeMocks.load.mockResolvedValue(null);
-    savedResumeMocks.save.mockImplementation(async (_user, savedResume) => savedResume);
+    savedResumeMocks.save.mockImplementation(async (_user, savedResume) => ({
+      savedResume,
+      persisted: true,
+    }));
+    privacyMocks.load.mockResolvedValue({
+      saveResumeData: true,
+      hasSavedResumeData: false,
+    });
     analysisMocks.analyze.mockResolvedValue(PROFILE);
 
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
@@ -344,6 +364,35 @@ describe("ResumeMatchApp authentication recovery", () => {
     );
 
     expect(savedResumeMocks.load).not.toHaveBeenCalled();
+    expect(savedResumeMocks.save).not.toHaveBeenCalled();
+  });
+
+  it("keeps signed-in resume changes session-only when saving is disabled", async () => {
+    authMocks.setPersistence.mockResolvedValue(undefined);
+    authMocks.onAuthStateChanged.mockImplementation(
+      (_auth: unknown, next: (user: User | null) => void) => {
+        queueMicrotask(() => next(SIGNED_IN_USER));
+        return vi.fn();
+      },
+    );
+    privacyMocks.load.mockResolvedValue({
+      saveResumeData: false,
+      hasSavedResumeData: false,
+    });
+
+    render(<ResumeMatchApp />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Simulate parsed resume" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Continue test preferences" }),
+    );
+
+    expect(
+      await screen.findByText(/kept only in this session/i),
+    ).toBeTruthy();
+    await waitFor(() => expect(analysisMocks.analyze).toHaveBeenCalledOnce());
     expect(savedResumeMocks.save).not.toHaveBeenCalled();
   });
 });

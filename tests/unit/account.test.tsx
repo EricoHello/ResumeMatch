@@ -31,6 +31,11 @@ const SESSION_PROFILE: ResumeProfile = {
   preferences: SAVED_PREFERENCES,
 };
 
+const RESUME_PRIVACY_ON = {
+  status: "ready" as const,
+  privacy: { saveResumeData: true, hasSavedResumeData: true },
+};
+
 function signedInUser() {
   return {
     uid: "verified-user",
@@ -88,6 +93,10 @@ describe("Account", () => {
         onGoogleSignIn={vi.fn()}
         onSignOut={onSignOut}
         onLeaveGuestMode={vi.fn()}
+        onDataDeleted={vi.fn()}
+        resumePrivacyState={RESUME_PRIVACY_ON}
+        onResumePrivacyChange={vi.fn()}
+        onReloadResumePrivacy={vi.fn()}
       />,
     );
 
@@ -99,6 +108,11 @@ describe("Account", () => {
     expect(screen.getByText("$120,000 / year")).toBeTruthy();
     expect(screen.getByText("Senior Frontend Engineer")).toBeTruthy();
     expect(screen.getByText("Mid")).toBeTruthy();
+    expect(
+      screen
+        .getByRole("switch", { name: "Save my resume for future sessions" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/preferences",
       expect.objectContaining({
@@ -135,6 +149,10 @@ describe("Account", () => {
         onGoogleSignIn={onGoogleSignIn}
         onSignOut={vi.fn()}
         onLeaveGuestMode={vi.fn()}
+        onDataDeleted={vi.fn()}
+        resumePrivacyState={{ status: "loading" }}
+        onResumePrivacyChange={vi.fn()}
+        onReloadResumePrivacy={vi.fn()}
       />,
     );
 
@@ -144,8 +162,194 @@ describe("Account", () => {
     expect(screen.getAllByText("Remote")).toHaveLength(2);
     expect(screen.getByText("$95,000 / year")).toBeTruthy();
     expect(fetch).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Send My Data" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete My Data" })).toBeNull();
+    expect(screen.queryByRole("switch")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Sign in with Google" }));
     await waitFor(() => expect(onGoogleSignIn).toHaveBeenCalledOnce());
+  });
+
+  it("emails account data using a fresh Firebase token", async () => {
+    const user = signedInUser();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({ data: { preferences: SAVED_PREFERENCES } }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ data: { sent: true } }));
+
+    render(
+      <Account
+        identity={{ kind: "user", user }}
+        profile={SESSION_PROFILE}
+        firebaseAvailable
+        authBusy={false}
+        authMessage={null}
+        onBack={vi.fn()}
+        onGoogleSignIn={vi.fn()}
+        onSignOut={vi.fn()}
+        onLeaveGuestMode={vi.fn()}
+        onDataDeleted={vi.fn()}
+        resumePrivacyState={RESUME_PRIVACY_ON}
+        onResumePrivacyChange={vi.fn()}
+        onReloadResumePrivacy={vi.fn()}
+      />,
+    );
+
+    await screen.findByText("Seattle, WA");
+    fireEvent.click(screen.getByRole("button", { name: "Send My Data" }));
+
+    expect(
+      await screen.findByText(/sent to your authenticated account email/i),
+    ).toBeTruthy();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/account/data",
+      expect.objectContaining({
+        method: "POST",
+        headers: { Authorization: "Bearer fresh-firebase-token" },
+        cache: "no-store",
+      }),
+    );
+  });
+
+  it("requires an explicit irreversible warning before deleting account data", async () => {
+    const user = signedInUser();
+    const onDataDeleted = vi.fn();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({ data: { preferences: SAVED_PREFERENCES } }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ data: { deleted: true } }));
+
+    render(
+      <Account
+        identity={{ kind: "user", user }}
+        profile={SESSION_PROFILE}
+        firebaseAvailable
+        authBusy={false}
+        authMessage={null}
+        onBack={vi.fn()}
+        onGoogleSignIn={vi.fn()}
+        onSignOut={vi.fn()}
+        onLeaveGuestMode={vi.fn()}
+        onDataDeleted={onDataDeleted}
+        resumePrivacyState={RESUME_PRIVACY_ON}
+        onResumePrivacyChange={vi.fn()}
+        onReloadResumePrivacy={vi.fn()}
+      />,
+    );
+
+    await screen.findByText("Seattle, WA");
+    fireEvent.click(screen.getByRole("button", { name: "Delete My Data" }));
+
+    const confirmation = screen.getByRole("alertdialog");
+    expect(confirmation.textContent).toContain("This cannot be undone.");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Yes, permanently delete" }),
+    );
+
+    expect(
+      await screen.findByText(/has been permanently deleted/i),
+    ).toBeTruthy();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/account/data",
+      expect.objectContaining({
+        method: "DELETE",
+        headers: { Authorization: "Bearer fresh-firebase-token" },
+        cache: "no-store",
+      }),
+    );
+    expect(onDataDeleted).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(
+      screen.getByText(/No saved job preferences yet/i),
+    ).toBeTruthy();
+  });
+
+  it("turns resume saving off and offers to delete only existing resume data", async () => {
+    const user = signedInUser();
+    const onResumePrivacyChange = vi.fn();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({ data: { preferences: SAVED_PREFERENCES } }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            privacy: {
+              saveResumeData: false,
+              hasSavedResumeData: true,
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ data: { deleted: true } }));
+
+    render(
+      <Account
+        identity={{ kind: "user", user }}
+        profile={SESSION_PROFILE}
+        firebaseAvailable
+        authBusy={false}
+        authMessage={null}
+        onBack={vi.fn()}
+        onGoogleSignIn={vi.fn()}
+        onSignOut={vi.fn()}
+        onLeaveGuestMode={vi.fn()}
+        onDataDeleted={vi.fn()}
+        resumePrivacyState={RESUME_PRIVACY_ON}
+        onResumePrivacyChange={onResumePrivacyChange}
+        onReloadResumePrivacy={vi.fn()}
+      />,
+    );
+
+    await screen.findByText("Seattle, WA");
+    fireEvent.click(
+      screen.getByRole("switch", {
+        name: "Save my resume for future sessions",
+      }),
+    );
+
+    const confirmation = await screen.findByRole("alertdialog");
+    expect(confirmation.textContent).toContain(
+      "job preferences will not be deleted",
+    );
+    expect(onResumePrivacyChange).toHaveBeenCalledWith({
+      saveResumeData: false,
+      hasSavedResumeData: true,
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/account/privacy",
+      expect.objectContaining({
+        method: "PUT",
+        headers: {
+          Authorization: "Bearer fresh-firebase-token",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ saveResumeData: false }),
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Delete saved resume data" }),
+    );
+
+    expect(
+      await screen.findByText(/previously saved resume text.*permanently deleted/i),
+    ).toBeTruthy();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/resumes/saved",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+    expect(onResumePrivacyChange).toHaveBeenLastCalledWith({
+      saveResumeData: false,
+      hasSavedResumeData: false,
+    });
   });
 });

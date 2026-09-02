@@ -13,7 +13,10 @@ import {
   JobPreferences,
   type PreferenceIdentity,
 } from "@/components/job-preferences";
-import { Account } from "@/components/account";
+import {
+  Account,
+  type ResumePrivacyViewState,
+} from "@/components/account";
 import { JobSearch } from "@/components/job-search";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -34,6 +37,8 @@ import {
 } from "@/lib/firebase/client";
 import type { JobPreferences as JobPreferencesValue } from "@/lib/preferences/types";
 import type { ResumeProfile } from "@/lib/analysis/types";
+import { loadResumePrivacySettings } from "@/lib/privacy/client";
+import type { ResumePrivacyStatus } from "@/lib/privacy/types";
 import {
   loadSavedResume,
   saveSavedResume,
@@ -52,6 +57,10 @@ type AuthState =
   | { status: "user"; user: User };
 
 type AppView = "match" | "account";
+type UserResumePrivacyState = {
+  userId: string;
+  view: ResumePrivacyViewState;
+};
 type SavedResumeLoadState =
   | { status: "loading" }
   | { status: "ready" }
@@ -60,6 +69,7 @@ type ResumePersistenceState =
   | { status: "idle" }
   | { status: "saving" }
   | { status: "saved" }
+  | { status: "session-only" }
   | { status: "error"; message: string };
 
 function readableAuthError(error: unknown) {
@@ -89,9 +99,11 @@ function GoogleIcon() {
 function ResumeJourney({
   identity,
   onProfileChange,
+  saveResumeData,
 }: {
   identity: PreferenceIdentity;
   onProfileChange: (profile: ResumeProfile | null) => void;
+  saveResumeData: boolean;
 }) {
   const signedInUser = identity.kind === "user" ? identity.user : null;
   const [resume, setResume] = useState<ResumeParseResult | null>(null);
@@ -111,9 +123,10 @@ function ResumeJourney({
   const analysisRequestRef = useRef<AbortController | null>(null);
   const savedResumeLoadRequestRef = useRef<AbortController | null>(null);
   const persistenceAbortRef = useRef<AbortController | null>(null);
-  const persistenceQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const persistenceQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const latestPersistenceRequestRef = useRef(0);
   const pendingSavedResumeRef = useRef<SavedResume | null>(null);
+  const previousSaveResumeDataRef = useRef(saveResumeData);
   const lastAutomaticAttemptRef = useRef<{
     resume: ResumeParseResult;
     preferences: JobPreferencesValue;
@@ -140,9 +153,14 @@ function ResumeJourney({
 
   const persistResume = useCallback(
     (savedResume: SavedResume) => {
+      pendingSavedResumeRef.current = savedResume;
       if (!signedInUser) return;
 
-      pendingSavedResumeRef.current = savedResume;
+      if (!saveResumeData) {
+        setPersistenceState({ status: "session-only" });
+        return;
+      }
+
       const requestNumber = latestPersistenceRequestRef.current + 1;
       latestPersistenceRequestRef.current = requestNumber;
       setPersistenceState({ status: "saving" });
@@ -154,17 +172,19 @@ function ResumeJourney({
       const operation = persistenceQueueRef.current
         .catch(() => undefined)
         .then(async () => {
-          await saveSavedResume(signedInUser, savedResume, signal);
+          return saveSavedResume(signedInUser, savedResume, signal);
         });
       persistenceQueueRef.current = operation;
 
       void operation.then(
-        () => {
+        (result) => {
           if (
             !signal.aborted &&
             latestPersistenceRequestRef.current === requestNumber
           ) {
-            setPersistenceState({ status: "saved" });
+            setPersistenceState({
+              status: result.persisted ? "saved" : "session-only",
+            });
           }
         },
         (error: unknown) => {
@@ -183,8 +203,27 @@ function ResumeJourney({
         },
       );
     },
-    [signedInUser],
+    [saveResumeData, signedInUser],
   );
+
+  useEffect(() => {
+    const wasEnabled = previousSaveResumeDataRef.current;
+    previousSaveResumeDataRef.current = saveResumeData;
+    if (!signedInUser || wasEnabled === saveResumeData) return;
+
+    if (!saveResumeData) {
+      latestPersistenceRequestRef.current += 1;
+      persistenceAbortRef.current?.abort();
+      persistenceAbortRef.current = null;
+      if (pendingSavedResumeRef.current) {
+        setPersistenceState({ status: "session-only" });
+      }
+      return;
+    }
+
+    const pendingResume = pendingSavedResumeRef.current;
+    if (pendingResume) persistResume(pendingResume);
+  }, [persistResume, saveResumeData, signedInUser]);
 
   const loadAccountResume = useCallback(async () => {
     if (!signedInUser) return;
@@ -449,6 +488,11 @@ function ResumeJourney({
           Resume changes saved to your account.
         </p>
       )}
+      {signedInUser && persistenceState.status === "session-only" && (
+        <p className="resume-persistence-status" role="status">
+          Resume changes are kept only in this session. Resume saving is off.
+        </p>
+      )}
       {signedInUser && persistenceState.status === "error" && (
         <div className="notice notice--error saved-resume-notice" role="alert">
           <span className="notice-icon" aria-hidden="true">!</span>
@@ -467,7 +511,7 @@ function ResumeJourney({
       {analysisState && (
         <ResumeAnalysis
           state={analysisState}
-          persistsToAccount={Boolean(signedInUser)}
+          persistsToAccount={Boolean(signedInUser && saveResumeData)}
           onRetry={retryAnalysis}
         />
       )}
@@ -485,11 +529,46 @@ export function ResumeMatchApp() {
     identityKey: string;
     profile: ResumeProfile;
   } | null>(null);
+  const [accountDataVersion, setAccountDataVersion] = useState(0);
+  const [userResumePrivacy, setUserResumePrivacy] =
+    useState<UserResumePrivacyState | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const choiceHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const mainHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const resumePrivacyRequestRef = useRef<AbortController | null>(null);
   const firebaseAvailable = isFirebaseClientConfigured();
+
+  const loadResumePrivacy = useCallback(async (user: User) => {
+    resumePrivacyRequestRef.current?.abort();
+    const controller = new AbortController();
+    resumePrivacyRequestRef.current = controller;
+
+    try {
+      const privacy = await loadResumePrivacySettings(user, controller.signal);
+      if (controller.signal.aborted) return;
+      setUserResumePrivacy({
+        userId: user.uid,
+        view: { status: "ready", privacy },
+      });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setUserResumePrivacy({
+        userId: user.uid,
+        view: {
+          status: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "We couldn’t load your resume privacy setting.",
+        },
+      });
+    } finally {
+      if (resumePrivacyRequestRef.current === controller) {
+        resumePrivacyRequestRef.current = null;
+      }
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -576,6 +655,23 @@ export function ResumeMatchApp() {
   }, []);
 
   useEffect(() => {
+    if (authState.status !== "user") {
+      resumePrivacyRequestRef.current?.abort();
+      resumePrivacyRequestRef.current = null;
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      void loadResumePrivacy(authState.user);
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resumePrivacyRequestRef.current?.abort();
+      resumePrivacyRequestRef.current = null;
+    };
+  }, [authState, loadResumePrivacy]);
+
+  useEffect(() => {
     if (authState.status !== "choice") return;
     const frame = window.requestAnimationFrame(() => choiceHeadingRef.current?.focus());
     return () => window.cancelAnimationFrame(frame);
@@ -642,6 +738,15 @@ export function ResumeMatchApp() {
       ? `user:${identity.user.uid}`
       : "guest"
     : null;
+  const resumePrivacyState: ResumePrivacyViewState =
+    identity?.kind === "user" &&
+    userResumePrivacy?.userId === identity.user.uid
+      ? userResumePrivacy.view
+      : { status: "loading" };
+  const saveResumeData =
+    identity?.kind === "user" &&
+    resumePrivacyState.status === "ready" &&
+    resumePrivacyState.privacy.saveResumeData;
 
   const currentProfile =
     identityKey && sessionProfile?.identityKey === identityKey
@@ -783,9 +888,10 @@ export function ResumeMatchApp() {
               {authMessage && <p className="account-error" role="alert">{authMessage}</p>}
 
               <ResumeJourney
-                key={identityKey}
+                key={`${identityKey}:${accountDataVersion}`}
                 identity={identity}
                 onProfileChange={handleProfileChange}
+                saveResumeData={Boolean(saveResumeData)}
               />
 
             <p className="privacy-note">
@@ -793,7 +899,9 @@ export function ResumeMatchApp() {
                 <path d="M10 1.75a4 4 0 0 0-4 4v2H5A1.75 1.75 0 0 0 3.25 9.5v6.75A1.75 1.75 0 0 0 5 18h10a1.75 1.75 0 0 0 1.75-1.75V9.5A1.75 1.75 0 0 0 15 7.75h-1v-2a4 4 0 0 0-4-4Zm2.5 6h-5v-2a2.5 2.5 0 0 1 5 0v2Z" />
               </svg>
               {identity.kind === "user"
-                ? "Extracted resume text, your latest AI profile, and job preferences are saved to your account. The original file is not stored. "
+                ? saveResumeData
+                  ? "Extracted resume text, your latest AI profile, and job preferences are saved to your account. The original file is not stored. "
+                  : "New resume text and AI profiles stay only in this session; job preferences still save to your account. "
                 : "Resume files and AI profiles are not saved. Guest preferences stay only in this browser tab. "}
               Extracted text is sent to Gemini only when you continue from job
               preferences.
@@ -814,6 +922,39 @@ export function ResumeMatchApp() {
             onGoogleSignIn={() => void googleSignIn()}
             onSignOut={() => void googleSignOut()}
             onLeaveGuestMode={leaveGuestMode}
+            resumePrivacyState={resumePrivacyState}
+            onResumePrivacyChange={(privacy: ResumePrivacyStatus) => {
+              if (identity.kind !== "user") return;
+              setUserResumePrivacy({
+                userId: identity.user.uid,
+                view: { status: "ready", privacy },
+              });
+            }}
+            onReloadResumePrivacy={() => {
+              if (identity.kind === "user") {
+                setUserResumePrivacy({
+                  userId: identity.user.uid,
+                  view: { status: "loading" },
+                });
+                void loadResumePrivacy(identity.user);
+              }
+            }}
+            onDataDeleted={() => {
+              setSessionProfile(null);
+              setAccountDataVersion((version) => version + 1);
+              if (identity.kind === "user") {
+                setUserResumePrivacy({
+                  userId: identity.user.uid,
+                  view: {
+                    status: "ready",
+                    privacy: {
+                      saveResumeData: true,
+                      hasSavedResumeData: false,
+                    },
+                  },
+                });
+              }
+            }}
           />
         )}
       </div>

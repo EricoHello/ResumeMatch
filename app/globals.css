@@ -716,6 +716,217 @@ button {
   line-height: 1.55;
 }
 
+.resume-privacy-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px 28px;
+  align-items: center;
+}
+
+.resume-privacy-card > div:first-child {
+  max-width: 620px;
+}
+
+.resume-privacy-card p:not(.step-label) {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.privacy-switch {
+  min-width: 94px;
+  padding: 8px 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.privacy-switch-track {
+  width: 34px;
+  height: 20px;
+  padding: 2px;
+  display: block;
+  border-radius: 999px;
+  background: #a4adbc;
+  transition: background 150ms ease;
+}
+
+.privacy-switch-track span {
+  width: 16px;
+  height: 16px;
+  display: block;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(20, 29, 49, 0.28);
+  transition: transform 150ms ease;
+}
+
+.privacy-switch[aria-checked="true"] {
+  color: var(--brand);
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.privacy-switch[aria-checked="true"] .privacy-switch-track {
+  background: var(--brand);
+}
+
+.privacy-switch[aria-checked="true"] .privacy-switch-track span {
+  transform: translateX(14px);
+}
+
+.privacy-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.resume-privacy-status {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.resume-privacy-load-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.resume-privacy-load-error p {
+  max-width: 290px;
+  margin: 0 !important;
+  color: var(--danger) !important;
+}
+
+.resume-privacy-load-error .secondary-button {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+.resume-delete-confirmation,
+.resume-privacy-message {
+  grid-column: 1 / -1;
+}
+
+.resume-privacy-message {
+  margin: -1px 0 0 !important;
+  font-weight: 700;
+}
+
+.resume-privacy-message--success {
+  color: var(--success) !important;
+}
+
+.resume-privacy-message--error {
+  color: var(--danger) !important;
+}
+
+.account-data-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px 28px;
+  align-items: center;
+}
+
+.account-data-card > div:first-child {
+  max-width: 570px;
+}
+
+.account-data-card p:not(.step-label) {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.account-data-actions,
+.delete-confirmation-actions {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+
+.account-data-actions button,
+.delete-confirmation-actions button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.danger-button {
+  min-height: 42px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  color: var(--danger);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.danger-button:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.danger-button--solid {
+  color: #fff;
+  background: var(--danger);
+}
+
+.danger-button--solid:hover:not(:disabled) {
+  filter: brightness(0.93);
+}
+
+.danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.delete-confirmation {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--danger);
+  border-radius: 12px;
+  background: var(--danger-soft);
+}
+
+.delete-confirmation strong {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.delete-confirmation p {
+  max-width: 650px;
+}
+
+.account-data-message {
+  grid-column: 1 / -1;
+  margin: -2px 0 0 !important;
+  font-weight: 700;
+}
+
+.account-data-message--success {
+  color: var(--success) !important;
+}
+
+.account-data-message--error {
+  color: var(--danger) !important;
+}
+
 .account-access-card {
   display: flex;
   align-items: center;
@@ -1126,6 +1337,8 @@ button {
 .nav-account-button:focus-visible,
 .account-back:focus-visible,
 .account-exit-button:focus-visible,
+.danger-button:focus-visible,
+.privacy-switch:focus-visible,
 .theme-toggle:focus-visible,
 .field input:focus-visible,
 .card-heading h2:focus-visible,
@@ -2255,6 +2468,30 @@ input:disabled {
 
   .account-grid {
     grid-template-columns: 1fr;
+  }
+
+  .account-data-card {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-privacy-card {
+    grid-template-columns: 1fr;
+  }
+
+  .privacy-switch {
+    justify-self: start;
+  }
+
+  .account-data-actions,
+  .delete-confirmation,
+  .delete-confirmation-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .account-data-actions button,
+  .delete-confirmation-actions button {
+    width: 100%;
   }
 
   .account-access-card {

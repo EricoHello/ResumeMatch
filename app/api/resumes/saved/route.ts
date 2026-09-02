@@ -7,6 +7,7 @@ import {
 import { savedResumeRepository } from "@/lib/resume/saved-repository";
 import type {
   GetSavedResumeResponse,
+  DeleteSavedResumeResponse,
   SavedResumeErrorCode,
   SavedResumeErrorResponse,
   SaveSavedResumeResponse,
@@ -95,7 +96,7 @@ async function readBoundedJson(request: Request): Promise<unknown> {
 
 function authenticationError(
   authentication: Awaited<ReturnType<typeof authenticatedUserId>>,
-  operation: "load" | "save",
+  operation: "load" | "save" | "delete",
 ) {
   if (authentication.status === "required") {
     return errorResponse(
@@ -112,6 +113,27 @@ function authenticationError(
     );
   }
   return null;
+}
+
+export async function DELETE(request: Request) {
+  const authentication = await authenticatedUserId(request);
+  const authError = authenticationError(authentication, "delete");
+  if (authError) return authError;
+  if (authentication.status !== "authenticated") {
+    return errorResponse("AUTH_REQUIRED", "Sign in to delete saved resume data.", 401);
+  }
+
+  try {
+    await savedResumeRepository.delete(authentication.userId);
+    const body: DeleteSavedResumeResponse = { data: { deleted: true } };
+    return NextResponse.json(body, { headers: RESPONSE_HEADERS });
+  } catch {
+    return errorResponse(
+      "SAVED_RESUME_UNAVAILABLE",
+      "We couldn't delete your saved resume data. Please try again.",
+      503,
+    );
+  }
 }
 
 export async function GET(request: Request) {
@@ -177,12 +199,12 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const storedResume = await savedResumeRepository.save(
+    const result = await savedResumeRepository.save(
       authentication.userId,
       savedResume,
     );
     const body: SaveSavedResumeResponse = {
-      data: { savedResume: storedResume },
+      data: result,
     };
     return NextResponse.json(body, { headers: RESPONSE_HEADERS });
   } catch {

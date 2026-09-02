@@ -16,6 +16,18 @@ export class FirebaseAuthenticationUnavailableError extends Error {
   }
 }
 
+export class FirebaseAuthenticatedEmailUnavailableError extends Error {
+  constructor() {
+    super("The authenticated Firebase user does not have a verified email address.");
+    this.name = "FirebaseAuthenticatedEmailUnavailableError";
+  }
+}
+
+export type AuthenticatedFirebaseIdentity = {
+  userId: string;
+  email: string;
+};
+
 function readBearerToken(request: Request): string {
   const authorization = request.headers.get("authorization");
   const match = authorization?.match(/^Bearer ([^\s]+)$/i);
@@ -27,9 +39,7 @@ function readBearerToken(request: Request): string {
   return match[1];
 }
 
-export async function authenticateFirebaseRequest(
-  request: Request,
-): Promise<string> {
+async function verifyFirebaseRequest(request: Request) {
   const token = readBearerToken(request);
   let auth: ReturnType<typeof getFirebaseAdminAuth>;
 
@@ -46,8 +56,27 @@ export async function authenticateFirebaseRequest(
       throw new FirebaseAuthenticationError();
     }
 
-    return decodedToken.uid;
+    return decodedToken;
   } catch {
     throw new FirebaseAuthenticationError();
   }
+}
+
+export async function authenticateFirebaseRequest(
+  request: Request,
+): Promise<string> {
+  return (await verifyFirebaseRequest(request)).uid;
+}
+
+export async function authenticateFirebaseIdentity(
+  request: Request,
+): Promise<AuthenticatedFirebaseIdentity> {
+  const decodedToken = await verifyFirebaseRequest(request);
+  const email = decodedToken.email?.trim();
+
+  if (!email || decodedToken.email_verified !== true) {
+    throw new FirebaseAuthenticatedEmailUnavailableError();
+  }
+
+  return { userId: decodedToken.uid, email };
 }

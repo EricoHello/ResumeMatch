@@ -14,6 +14,18 @@ export type GetSavedResumeResponse = {
 export type SaveSavedResumeResponse = {
   data: {
     savedResume: SavedResume;
+    persisted: boolean;
+  };
+};
+
+export type SaveSavedResumeResult = {
+  savedResume: SavedResume;
+  persisted: boolean;
+};
+
+export type DeleteSavedResumeResponse = {
+  data: {
+    deleted: true;
   };
 };
 

@@ -12,7 +12,9 @@ vi.mock("@/lib/firebase/admin", () => ({
 }));
 
 import {
+  authenticateFirebaseIdentity,
   authenticateFirebaseRequest,
+  FirebaseAuthenticatedEmailUnavailableError,
   FirebaseAuthenticationError,
   FirebaseAuthenticationUnavailableError,
 } from "@/lib/firebase/auth";
@@ -36,6 +38,38 @@ describe("authenticateFirebaseRequest", () => {
       "firebase-user-123",
     );
     expect(adminMocks.verifyIdToken).toHaveBeenCalledWith("verified-id-token");
+  });
+
+  it("returns a verified token email for server-controlled delivery", async () => {
+    adminMocks.verifyIdToken.mockResolvedValue({
+      uid: "firebase-user-123",
+      email: "person@example.com",
+      email_verified: true,
+    });
+    const request = new Request("http://localhost/api/account/data", {
+      headers: { authorization: "Bearer verified-id-token" },
+    });
+
+    await expect(authenticateFirebaseIdentity(request)).resolves.toEqual({
+      userId: "firebase-user-123",
+      email: "person@example.com",
+    });
+  });
+
+  it("does not allow data delivery to a missing or unverified email", async () => {
+    adminMocks.verifyIdToken.mockResolvedValue({
+      uid: "firebase-user-123",
+      email: "unverified@example.com",
+      email_verified: false,
+    });
+
+    await expect(
+      authenticateFirebaseIdentity(
+        new Request("http://localhost/api/account/data", {
+          headers: { authorization: "Bearer verified-id-token" },
+        }),
+      ),
+    ).rejects.toBeInstanceOf(FirebaseAuthenticatedEmailUnavailableError);
   });
 
   it.each([

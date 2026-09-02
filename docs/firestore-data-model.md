@@ -1,20 +1,24 @@
 # Firestore data model
 
-ResumeMatch uses Firebase Authentication for identity and a server-mediated API for current preference reads and writes. The browser never chooses a user ID: `GET` and `PUT /api/preferences` verify a Firebase ID token, then derive the Firestore path from the decoded UID.
+ResumeMatch uses Firebase Authentication for identity and server-mediated APIs for account data. The browser never chooses a user ID: every account route verifies a Firebase ID token and derives the Firestore path from its decoded UID.
 
 ## Current persisted data
 
-Authenticated preferences are stored at:
+Authenticated job preferences are stored at:
 
 ```text
 users/{uid}/preferences/job
 ```
 
-The document contains only:
+The current schema contains:
 
 ```text
-schemaVersion: 1
+schemaVersion: 4
 targetLocation: string
+additionalLocations: string[]
+radiusMiles: integer
+workArrangements: ("remote" | "hybrid" | "in_person")[]
+employmentTypes: ("contract" | "full_time" | "part_time" | "seasonal")[]
 minimumSalary: integer
 salaryCurrency: "USD"
 salaryPeriod: "year"
@@ -22,53 +26,52 @@ createdAt: timestamp
 updatedAt: timestamp
 ```
 
-Guest preferences are stored in browser `sessionStorage` only. Uploaded resume files and extracted text remain in request/browser memory and are never written to Firestore.
-
-At the final intake step, the UI assembles an in-memory `ResumeAnalysisInput` from the parsed resume and validated preferences. The server sends this data to Gemini for structured extraction. The returned profile stays in browser memory for the current flow and is not persisted by ResumeMatch.
-
-## Session-only AI profile data
-
-The current AI profile contains:
+The latest saved resume state is stored at:
 
 ```text
-summary: string
-skills: string[]
-experienceLevel: "entry" | "mid" | "senior" | "lead" | "executive" | "unknown"
-recentJobTitles: string[]
-targetRoles: string[]
-searchKeywords: string[]
-preferences.targetLocation: string
-preferences.minimumSalary: integer
+users/{uid}/resumeProfiles/current
 ```
 
-This profile prepares the data needed by a future job-search step. The current application does not search for jobs, score matches, or write the profile to Firestore.
-
-## Reserved future persistence
-
-If profile persistence is added later, AI-created resume profiles have the reserved path:
+It contains normalized extracted resume text and the latest AI candidate profile, when one has been generated. The original PDF or DOCX file is never stored.
 
 ```text
-users/{uid}/resumeProfiles/{profileId}
+schemaVersion: 1
+resumeText: string
+profile: ResumeProfile | null
+createdAt: timestamp
+updatedAt: timestamp
 ```
 
-A future persisted profile could contain fields such as:
+The signed-in user's resume-storage choice is stored at:
 
 ```text
-summary: string
-skills: string[]
-experienceLevel: string
-recentJobTitles: string[]
-targetRoles: string[]
-searchKeywords: string[]
-analyzedAt: timestamp
+users/{uid}/settings/privacy
 ```
 
-This iteration does not create profile documents or empty placeholders. Firestore rules continue to deny all access to the reserved collection until persistence and its schema validation are implemented in a separate iteration.
+```text
+schemaVersion: 1
+saveResumeData: boolean
+createdAt: timestamp
+updatedAt: timestamp
+```
+
+If this document does not exist, `saveResumeData` defaults to `true`. When it is `false`, new resume text and AI profiles remain in the current page session. Job preferences continue to save normally. Resume writes read this setting within the same Firestore transaction as the write, so a concurrent setting change prevents a stale write from committing.
+
+Guest preferences are stored in browser `sessionStorage`. Guest resume text and profiles stay in the current page session and are never written to Firestore.
+
+## Account data actions
+
+`POST /api/account/data` reads the current preference, saved-resume, and privacy documents, builds a JSON export containing `savedPreferences`, `extractedResumeText`, `aiCandidateProfile`, and `privacySettings`, and emails it only to the verified email address in the authenticated Firebase token. The client cannot provide or override the recipient.
+
+`DELETE /api/resumes/saved` deletes only `users/{uid}/resumeProfiles/current`. It is used when a user turns resume saving off and chooses to remove the previously stored resume text and AI profile. Preferences and the privacy setting are not deleted.
+
+`DELETE /api/account/data` recursively deletes the complete Firestore subtree rooted at `users/{uid}`, where `uid` comes only from the verified token. This covers the current documents and any future nested ResumeMatch documents. It does not delete the user's Google or Firebase Authentication identity.
 
 ## Security boundary
 
-- Preference API calls require a verified Firebase ID token.
-- The UID always comes from the verified token, never request JSON or query parameters.
-- The API accepts only `targetLocation` and `minimumSalary` and applies strict validation.
-- Firestore rules permit only owner-scoped access to the exact preference document and deny collection listing, deletion, cross-user access, and all unmatched paths.
-- Firebase Admin operations bypass Firestore rules, so API authentication and validation remain mandatory.
+- Preference, saved-resume, privacy-setting, export, and deletion API calls require a verified Firebase ID token.
+- The UID always comes from the verified token, never request JSON, query parameters, or a browser-selected path.
+- Data exports require a verified email claim and use it as the sole recipient.
+- The preference, privacy-setting, and saved-resume APIs apply strict schema and size validation.
+- Firestore rules allow owner-scoped reads of preferences but keep resume profiles server-managed; unmatched paths are denied.
+- Firebase Admin operations bypass Firestore rules, so API authentication, validation, and exact path construction remain mandatory.

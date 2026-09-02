@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { PreferenceIdentity } from "@/components/job-preferences";
 import type { ResumeProfile } from "@/lib/analysis/types";
+import { saveResumePrivacySettings } from "@/lib/privacy/client";
+import type { ResumePrivacyStatus } from "@/lib/privacy/types";
 import {
   EMPLOYMENT_TYPE_LABELS,
   WORK_ARRANGEMENT_LABELS,
@@ -12,6 +14,12 @@ import {
 } from "@/lib/preferences/types";
 import { parseJobPreferences } from "@/lib/preferences/validation";
 import { readGuestSession } from "@/lib/session/guest-session";
+import { deleteSavedResume } from "@/lib/resume/saved-client";
+
+export type ResumePrivacyViewState =
+  | { status: "loading" }
+  | { status: "ready"; privacy: ResumePrivacyStatus }
+  | { status: "error"; message: string };
 
 type AccountProps = {
   identity: PreferenceIdentity;
@@ -23,6 +31,10 @@ type AccountProps = {
   onGoogleSignIn: () => void;
   onSignOut: () => void;
   onLeaveGuestMode: () => void;
+  onDataDeleted: () => void;
+  resumePrivacyState: ResumePrivacyViewState;
+  onResumePrivacyChange: (privacy: ResumePrivacyStatus) => void;
+  onReloadResumePrivacy: () => void;
 };
 
 type PreferencesState =
@@ -160,9 +172,15 @@ export function Account({
   onGoogleSignIn,
   onSignOut,
   onLeaveGuestMode,
+  onDataDeleted,
+  resumePrivacyState,
+  onResumePrivacyChange,
+  onReloadResumePrivacy,
 }: AccountProps) {
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const requestRef = useRef<AbortController | null>(null);
+  const dataActionRequestRef = useRef<AbortController | null>(null);
+  const privacyActionRequestRef = useRef<AbortController | null>(null);
   const signedInUser = identity.kind === "user" ? identity.user : null;
   const guestPreferences =
     identity.kind === "guest" ? readGuestSession()?.preferences ?? null : null;
@@ -171,6 +189,23 @@ export function Account({
       ? { status: "loading" }
       : { status: "ready", preferences: guestPreferences },
   );
+  const [dataAction, setDataAction] = useState<"send" | "delete" | null>(
+    null,
+  );
+  const [dataActionMessage, setDataActionMessage] = useState<{
+    kind: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
+  const [privacyAction, setPrivacyAction] = useState<
+    "updating" | "deleting-saved" | null
+  >(null);
+  const [privacyMessage, setPrivacyMessage] = useState<{
+    kind: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [deleteSavedResumePromptOpen, setDeleteSavedResumePromptOpen] =
+    useState(false);
 
   const loadPreferences = useCallback(async () => {
     if (!signedInUser) return;
@@ -233,8 +268,172 @@ export function Account({
       window.cancelAnimationFrame(frame);
       requestRef.current?.abort();
       requestRef.current = null;
+      dataActionRequestRef.current?.abort();
+      dataActionRequestRef.current = null;
+      privacyActionRequestRef.current?.abort();
+      privacyActionRequestRef.current = null;
     };
   }, [loadPreferences, signedInUser]);
+
+  const runDataAction = async (action: "send" | "delete") => {
+    if (!signedInUser) return;
+
+    dataActionRequestRef.current?.abort();
+    const controller = new AbortController();
+    dataActionRequestRef.current = controller;
+    setDataAction(action);
+    setDataActionMessage(null);
+
+    try {
+      const token = await signedInUser.getIdToken(true);
+      if (controller.signal.aborted) return;
+
+      const response = await fetch("/api/account/data", {
+        method: action === "send" ? "POST" : "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          await responseMessage(
+            response,
+            action === "send"
+              ? "We couldn’t email your ResumeMatch data. Please try again."
+              : "We couldn’t delete your ResumeMatch data. Please try again.",
+          ),
+        );
+      }
+
+      if (controller.signal.aborted) return;
+
+      if (action === "send") {
+        setDataActionMessage({
+          kind: "success",
+          text: "Your ResumeMatch data was sent to your authenticated account email.",
+        });
+      } else {
+        setDeleteConfirmationOpen(false);
+        setDeleteSavedResumePromptOpen(false);
+        setPreferencesState({ status: "ready", preferences: null });
+        onDataDeleted();
+        setDataActionMessage({
+          kind: "success",
+          text: "All ResumeMatch data stored in Firestore for your account has been permanently deleted.",
+        });
+      }
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setDataActionMessage({
+        kind: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : action === "send"
+              ? "We couldn’t email your ResumeMatch data. Please try again."
+              : "We couldn’t delete your ResumeMatch data. Please try again.",
+      });
+    } finally {
+      if (dataActionRequestRef.current === controller) {
+        dataActionRequestRef.current = null;
+        setDataAction(null);
+      }
+    }
+  };
+
+  const updateResumePrivacy = async (saveResumeData: boolean) => {
+    if (!signedInUser) return;
+
+    privacyActionRequestRef.current?.abort();
+    const controller = new AbortController();
+    privacyActionRequestRef.current = controller;
+    setPrivacyAction("updating");
+    setPrivacyMessage(null);
+    setDeleteSavedResumePromptOpen(false);
+
+    try {
+      const privacy = await saveResumePrivacySettings(
+        signedInUser,
+        saveResumeData,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+
+      onResumePrivacyChange(privacy);
+      if (!saveResumeData && privacy.hasSavedResumeData) {
+        setDeleteSavedResumePromptOpen(true);
+      } else {
+        setPrivacyMessage({
+          kind: "success",
+          text: saveResumeData
+            ? "Future resume text and AI profiles will be saved to your account."
+            : "Future resume text and AI profiles will stay only in this session.",
+        });
+      }
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setPrivacyMessage({
+        kind: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "We couldn’t update your resume privacy setting. Please try again.",
+      });
+    } finally {
+      if (privacyActionRequestRef.current === controller) {
+        privacyActionRequestRef.current = null;
+        setPrivacyAction(null);
+      }
+    }
+  };
+
+  const deletePreviouslySavedResume = async () => {
+    if (!signedInUser) return;
+
+    privacyActionRequestRef.current?.abort();
+    const controller = new AbortController();
+    privacyActionRequestRef.current = controller;
+    setPrivacyAction("deleting-saved");
+    setPrivacyMessage(null);
+
+    try {
+      await deleteSavedResume(signedInUser, controller.signal);
+      if (controller.signal.aborted) return;
+
+      onResumePrivacyChange({
+        saveResumeData: false,
+        hasSavedResumeData: false,
+      });
+      setDeleteSavedResumePromptOpen(false);
+      setPrivacyMessage({
+        kind: "success",
+        text: "Your previously saved resume text and AI profile were permanently deleted. Job preferences remain saved.",
+      });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setPrivacyMessage({
+        kind: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "We couldn’t delete your saved resume data. Please try again.",
+      });
+    } finally {
+      if (privacyActionRequestRef.current === controller) {
+        privacyActionRequestRef.current = null;
+        setPrivacyAction(null);
+      }
+    }
+  };
+
+  const resumeSavingEnabled =
+    resumePrivacyState.status === "ready" &&
+    resumePrivacyState.privacy.saveResumeData;
+  const accountActionBusy =
+    dataAction !== null ||
+    privacyAction !== null ||
+    deleteSavedResumePromptOpen;
 
   return (
     <section className="account-page" aria-labelledby="account-heading">
@@ -337,7 +536,11 @@ export function Account({
           <div className="account-section-heading">
             <div>
               <p className="step-label">
-                {identity.kind === "user" ? "Saved to your account" : "Current session"}
+                {identity.kind === "user"
+                  ? resumeSavingEnabled
+                    ? "Saved to your account"
+                    : "Resume saving off"
+                  : "Current session"}
               </p>
               <h2 id="account-profile-heading">AI candidate profile</h2>
             </div>
@@ -360,17 +563,229 @@ export function Account({
           ) : (
             <p className="account-empty">
               {identity.kind === "user"
-                ? "No saved AI candidate profile yet. Complete resume analysis to save one here."
+                ? resumeSavingEnabled
+                  ? "No saved AI candidate profile yet. Complete resume analysis to save one here."
+                  : "No AI candidate profile in this session yet. Resume saving is turned off."
                 : "No AI candidate profile in this session yet. Complete resume analysis to see a summary here."}
             </p>
           )}
           <p className="account-storage-note">
             {identity.kind === "user"
-              ? "The latest AI candidate profile and extracted resume text are stored in your Firestore account. The original resume file is not stored."
+              ? resumeSavingEnabled
+                ? "The latest AI candidate profile and extracted resume text are stored in your Firestore account. The original resume file is not stored."
+                : "New resume text and AI profiles stay only in this page session. Job preferences still save normally."
               : "AI candidate profiles remain in memory for the current page session and are not persisted to Firestore."}
           </p>
         </section>
       </div>
+
+      {identity.kind === "user" && (
+        <section className="account-card resume-privacy-card" aria-labelledby="resume-privacy-heading">
+          <div>
+            <p className="step-label">Resume privacy</p>
+            <h2 id="resume-privacy-heading">
+              Save my resume for future sessions
+            </h2>
+            <p>
+              When off, new extracted resume text and AI profiles remain only in
+              this page session. Your job preferences and account access still save
+              normally.
+            </p>
+          </div>
+
+          {resumePrivacyState.status === "loading" && (
+            <div className="inline-status resume-privacy-status" role="status">
+              <span className="spinner spinner--small" aria-hidden="true" />
+              Loading setting…
+            </div>
+          )}
+
+          {resumePrivacyState.status === "error" && (
+            <div className="resume-privacy-load-error" role="alert">
+              <p>{resumePrivacyState.message}</p>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={onReloadResumePrivacy}
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          {resumePrivacyState.status === "ready" && (
+            <button
+              className="privacy-switch"
+              type="button"
+              role="switch"
+              aria-checked={resumePrivacyState.privacy.saveResumeData}
+              aria-labelledby="resume-privacy-heading"
+              disabled={accountActionBusy}
+              onClick={() =>
+                void updateResumePrivacy(
+                  !resumePrivacyState.privacy.saveResumeData,
+                )
+              }
+            >
+              <span className="privacy-switch-track" aria-hidden="true">
+                <span />
+              </span>
+              <span>
+                {privacyAction === "updating"
+                  ? "Saving…"
+                  : resumePrivacyState.privacy.saveResumeData
+                    ? "On"
+                    : "Off"}
+              </span>
+            </button>
+          )}
+
+          {deleteSavedResumePromptOpen && (
+            <div
+              className="delete-confirmation resume-delete-confirmation"
+              role="alertdialog"
+              aria-labelledby="saved-resume-delete-heading"
+              aria-describedby="saved-resume-delete-description"
+            >
+              <div>
+                <strong id="saved-resume-delete-heading">
+                  Delete the resume data already saved?
+                </strong>
+                <p id="saved-resume-delete-description">
+                  Resume saving is now off. You can keep the existing saved resume
+                  text and AI profile, or permanently delete them now. Deletion
+                  cannot be undone; job preferences will not be deleted.
+                </p>
+              </div>
+              <div className="delete-confirmation-actions">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={privacyAction === "deleting-saved"}
+                  onClick={() => {
+                    setDeleteSavedResumePromptOpen(false);
+                    setPrivacyMessage({
+                      kind: "success",
+                      text: "Resume saving is off. Your previously saved resume data remains in Firestore.",
+                    });
+                  }}
+                >
+                  Keep saved data
+                </button>
+                <button
+                  className="danger-button danger-button--solid"
+                  type="button"
+                  disabled={privacyAction === "deleting-saved"}
+                  autoFocus
+                  onClick={() => void deletePreviouslySavedResume()}
+                >
+                  {privacyAction === "deleting-saved"
+                    ? "Deleting…"
+                    : "Delete saved resume data"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {privacyMessage && (
+            <p
+              className={`resume-privacy-message resume-privacy-message--${privacyMessage.kind}`}
+              role={privacyMessage.kind === "error" ? "alert" : "status"}
+            >
+              {privacyMessage.text}
+            </p>
+          )}
+        </section>
+      )}
+
+      {identity.kind === "user" && (
+        <section className="account-card account-data-card" aria-labelledby="account-data-heading">
+          <div>
+            <p className="step-label">Privacy controls</p>
+            <h2 id="account-data-heading">Your ResumeMatch data</h2>
+            <p>
+              Email yourself a JSON copy of the data saved for this account, or
+              permanently remove all of it from Firestore. These actions only apply
+              to the authenticated account shown above.
+            </p>
+          </div>
+          <div className="account-data-actions">
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={accountActionBusy}
+              onClick={() => void runDataAction("send")}
+            >
+              {dataAction === "send" ? "Sending…" : "Send My Data"}
+            </button>
+            <button
+              className="danger-button"
+              type="button"
+              disabled={accountActionBusy}
+              onClick={() => {
+                setDataActionMessage(null);
+                setDeleteConfirmationOpen(true);
+              }}
+            >
+              Delete My Data
+            </button>
+          </div>
+
+          {deleteConfirmationOpen && (
+            <div
+              className="delete-confirmation"
+              role="alertdialog"
+              aria-labelledby="delete-confirmation-heading"
+              aria-describedby="delete-confirmation-description"
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && dataAction !== "delete") {
+                  setDeleteConfirmationOpen(false);
+                }
+              }}
+            >
+              <div>
+                <strong id="delete-confirmation-heading">
+                  Permanently delete your data?
+                </strong>
+                <p id="delete-confirmation-description">
+                  This will delete your saved job preferences, extracted resume text,
+                  and AI candidate profile from Firestore. This cannot be undone.
+                </p>
+              </div>
+              <div className="delete-confirmation-actions">
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={dataAction === "delete"}
+                  onClick={() => setDeleteConfirmationOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="danger-button danger-button--solid"
+                  type="button"
+                  disabled={dataAction === "delete"}
+                  autoFocus
+                  onClick={() => void runDataAction("delete")}
+                >
+                  {dataAction === "delete"
+                    ? "Deleting…"
+                    : "Yes, permanently delete"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {dataActionMessage && (
+            <p
+              className={`account-data-message account-data-message--${dataActionMessage.kind}`}
+              role={dataActionMessage.kind === "error" ? "alert" : "status"}
+            >
+              {dataActionMessage.text}
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="account-card account-access-card" aria-labelledby="account-access-heading">
         <div>
@@ -382,7 +797,9 @@ export function Account({
           </h2>
           <p>
             {identity.kind === "user"
-              ? "Signing out ends your authenticated ResumeMatch session. Your saved resume, latest AI profile, and job preferences remain in your account."
+              ? resumeSavingEnabled
+                ? "Signing out ends your authenticated ResumeMatch session. Your saved resume, latest AI profile, and job preferences remain in your account."
+                : "Signing out ends this session. Job preferences and any resume data you chose to keep remain in your account."
               : "Sign in with Google to save job preferences across visits. Your current guest data stays session-only."}
           </p>
         </div>
@@ -391,7 +808,7 @@ export function Account({
             <button
               className="secondary-button"
               type="button"
-              disabled={authBusy}
+              disabled={authBusy || accountActionBusy}
               onClick={onSignOut}
             >
               {authBusy ? "Signing out…" : "Sign out"}

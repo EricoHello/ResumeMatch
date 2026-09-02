@@ -11,17 +11,28 @@ const SAVED_RESUME = {
   profile: null,
 };
 
-function firestoreDouble(snapshot: {
+function firestoreDouble(resumeSnapshot: {
   exists: boolean;
   data?: () => unknown;
   get?: (key: string) => unknown;
-}) {
-  const document = { get: vi.fn() };
+}, privacySnapshot: {
+  exists: boolean;
+  data: () => Record<string, unknown> | undefined;
+} = { exists: false, data: () => undefined }) {
+  const document = { get: vi.fn(), delete: vi.fn() };
+  const privacyDocument = { get: vi.fn() };
   const resumeProfiles = { doc: vi.fn(() => document) };
-  const userDocument = { collection: vi.fn(() => resumeProfiles) };
+  const settings = { doc: vi.fn(() => privacyDocument) };
+  const userDocument = {
+    collection: vi.fn((name: string) =>
+      name === "settings" ? settings : resumeProfiles,
+    ),
+  };
   const users = { doc: vi.fn(() => userDocument) };
   const transaction = {
-    get: vi.fn(async () => snapshot),
+    get: vi.fn(async (reference: unknown) =>
+      reference === privacyDocument ? privacySnapshot : resumeSnapshot,
+    ),
     set: vi.fn(),
   };
   const firestore = {
@@ -31,7 +42,16 @@ function firestoreDouble(snapshot: {
         callback(transaction),
     ),
   };
-  return { document, firestore, resumeProfiles, transaction, userDocument, users };
+  return {
+    document,
+    firestore,
+    privacyDocument,
+    resumeProfiles,
+    settings,
+    transaction,
+    userDocument,
+    users,
+  };
 }
 
 describe("FirestoreSavedResumeRepository", () => {
@@ -43,9 +63,10 @@ describe("FirestoreSavedResumeRepository", () => {
       () => now,
     );
 
-    await expect(repository.save(USER_ID, SAVED_RESUME)).resolves.toEqual(
-      SAVED_RESUME,
-    );
+    await expect(repository.save(USER_ID, SAVED_RESUME)).resolves.toEqual({
+      savedResume: SAVED_RESUME,
+      persisted: true,
+    });
     expect(double.firestore.collection).toHaveBeenCalledWith("users");
     expect(double.users.doc).toHaveBeenCalledWith(USER_ID);
     expect(double.userDocument.collection).toHaveBeenCalledWith("resumeProfiles");
@@ -78,6 +99,27 @@ describe("FirestoreSavedResumeRepository", () => {
     );
   });
 
+  it("does not write when the persisted privacy setting is disabled", async () => {
+    const double = firestoreDouble(
+      { exists: false },
+      {
+        exists: true,
+        data: () => ({ schemaVersion: 1, saveResumeData: false }),
+      },
+    );
+    const repository = new FirestoreSavedResumeRepository(
+      () => double.firestore as never,
+    );
+
+    await expect(repository.save(USER_ID, SAVED_RESUME)).resolves.toEqual({
+      savedResume: SAVED_RESUME,
+      persisted: false,
+    });
+    expect(double.transaction.set).not.toHaveBeenCalled();
+    expect(double.transaction.get).toHaveBeenCalledOnce();
+    expect(double.transaction.get).toHaveBeenCalledWith(double.privacyDocument);
+  });
+
   it("returns the validated public record and omits server metadata", async () => {
     const double = firestoreDouble({ exists: false });
     double.document.get.mockResolvedValue({
@@ -94,5 +136,18 @@ describe("FirestoreSavedResumeRepository", () => {
     );
 
     await expect(repository.get(USER_ID)).resolves.toEqual(SAVED_RESUME);
+  });
+
+  it("checks for and deletes only the current saved resume document", async () => {
+    const double = firestoreDouble({ exists: false });
+    double.document.get.mockResolvedValue({ exists: true });
+    double.document.delete.mockResolvedValue(undefined);
+    const repository = new FirestoreSavedResumeRepository(
+      () => double.firestore as never,
+    );
+
+    await expect(repository.exists(USER_ID)).resolves.toBe(true);
+    await expect(repository.delete(USER_ID)).resolves.toBeUndefined();
+    expect(double.document.delete).toHaveBeenCalledOnce();
   });
 });

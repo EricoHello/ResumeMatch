@@ -13,6 +13,7 @@ const authMocks = vi.hoisted(() => {
 const repositoryMocks = vi.hoisted(() => ({
   get: vi.fn(),
   save: vi.fn(),
+  delete: vi.fn(),
 }));
 
 vi.mock("@/lib/firebase/auth", () => ({
@@ -24,7 +25,7 @@ vi.mock("@/lib/resume/saved-repository", () => ({
   savedResumeRepository: repositoryMocks,
 }));
 
-import { GET, PUT } from "@/app/api/resumes/saved/route";
+import { DELETE, GET, PUT } from "@/app/api/resumes/saved/route";
 
 const USER_ID = "verified-user";
 const SAVED_RESUME = {
@@ -32,7 +33,7 @@ const SAVED_RESUME = {
   profile: null,
 };
 
-function request(method: "GET" | "PUT", body?: unknown) {
+function request(method: "GET" | "PUT" | "DELETE", body?: unknown) {
   return new Request("http://localhost/api/resumes/saved", {
     method,
     headers: {
@@ -48,6 +49,7 @@ describe("authenticated saved resume route", () => {
     authMocks.authenticate.mockReset();
     repositoryMocks.get.mockReset();
     repositoryMocks.save.mockReset();
+    repositoryMocks.delete.mockReset();
     authMocks.authenticate.mockResolvedValue(USER_ID);
   });
 
@@ -64,7 +66,10 @@ describe("authenticated saved resume route", () => {
   });
 
   it("normalizes and saves under only the verified UID", async () => {
-    repositoryMocks.save.mockImplementation(async (_uid, savedResume) => savedResume);
+    repositoryMocks.save.mockImplementation(async (_uid, savedResume) => ({
+      savedResume,
+      persisted: true,
+    }));
     const response = await PUT(
       request("PUT", {
         resumeText: `  ${SAVED_RESUME.resumeText}  `,
@@ -75,8 +80,32 @@ describe("authenticated saved resume route", () => {
     expect(response.status).toBe(200);
     expect(repositoryMocks.save).toHaveBeenCalledWith(USER_ID, SAVED_RESUME);
     await expect(response.json()).resolves.toEqual({
-      data: { savedResume: SAVED_RESUME },
+      data: { savedResume: SAVED_RESUME, persisted: true },
     });
+  });
+
+  it("reports when the privacy setting prevented persistence", async () => {
+    repositoryMocks.save.mockResolvedValue({
+      savedResume: SAVED_RESUME,
+      persisted: false,
+    });
+
+    const response = await PUT(request("PUT", SAVED_RESUME));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      data: { savedResume: SAVED_RESUME, persisted: false },
+    });
+  });
+
+  it("deletes only the verified user's saved resume record", async () => {
+    repositoryMocks.delete.mockResolvedValue(undefined);
+
+    const response = await DELETE(request("DELETE"));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ data: { deleted: true } });
+    expect(repositoryMocks.delete).toHaveBeenCalledWith(USER_ID);
   });
 
   it("rejects guest access without touching Firestore", async () => {
@@ -86,11 +115,14 @@ describe("authenticated saved resume route", () => {
 
     const getResponse = await GET(request("GET"));
     const putResponse = await PUT(request("PUT", SAVED_RESUME));
+    const deleteResponse = await DELETE(request("DELETE"));
 
     expect(getResponse.status).toBe(401);
     expect(putResponse.status).toBe(401);
+    expect(deleteResponse.status).toBe(401);
     expect(repositoryMocks.get).not.toHaveBeenCalled();
     expect(repositoryMocks.save).not.toHaveBeenCalled();
+    expect(repositoryMocks.delete).not.toHaveBeenCalled();
   });
 
   it("rejects extra or invalid persisted fields", async () => {

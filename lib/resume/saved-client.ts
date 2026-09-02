@@ -1,6 +1,6 @@
 import type { User } from "firebase/auth";
 
-import type { SavedResume } from "./saved-types";
+import type { SavedResume, SaveSavedResumeResult } from "./saved-types";
 import { parseSavedResume } from "./saved-validation";
 
 export class SavedResumeClientError extends Error {
@@ -48,6 +48,31 @@ function parseResponse(body: unknown): SavedResume | null | undefined {
   }
 }
 
+function parseSaveResponse(body: unknown): SaveSavedResumeResult | undefined {
+  if (typeof body !== "object" || body === null || !("data" in body)) {
+    return undefined;
+  }
+  const data = body.data;
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    !("savedResume" in data) ||
+    !("persisted" in data) ||
+    typeof data.persisted !== "boolean"
+  ) {
+    return undefined;
+  }
+
+  try {
+    return {
+      savedResume: parseSavedResume(data.savedResume),
+      persisted: data.persisted,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 export async function loadSavedResume(
   user: User,
   signal: AbortSignal,
@@ -83,7 +108,7 @@ export async function saveSavedResume(
   user: User,
   savedResume: SavedResume,
   signal: AbortSignal,
-): Promise<SavedResume> {
+): Promise<SaveSavedResumeResult> {
   const normalized = parseSavedResume(savedResume);
   const token = await user.getIdToken(true);
   if (signal.aborted) throw signal.reason;
@@ -106,11 +131,34 @@ export async function saveSavedResume(
     );
   }
 
-  const storedResume = parseResponse(await response.json());
-  if (!storedResume) {
+  const result = parseSaveResponse(await response.json());
+  if (!result) {
     throw new SavedResumeClientError(
       "The server returned an unexpected saved-resume response.",
     );
   }
-  return storedResume;
+  return result;
+}
+
+export async function deleteSavedResume(
+  user: User,
+  signal: AbortSignal,
+): Promise<void> {
+  const token = await user.getIdToken(true);
+  if (signal.aborted) throw signal.reason;
+
+  const response = await fetch("/api/resumes/saved", {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok) {
+    throw new SavedResumeClientError(
+      await responseMessage(
+        response,
+        "We couldn’t delete your saved resume data. Please try again.",
+      ),
+    );
+  }
 }

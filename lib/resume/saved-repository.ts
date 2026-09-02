@@ -3,8 +3,12 @@ import "server-only";
 import { Timestamp, type Firestore } from "firebase-admin/firestore";
 
 import { getFirebaseAdminFirestore } from "@/lib/firebase/admin";
+import {
+  readSaveResumeDataSetting,
+  resumePrivacyDocument,
+} from "@/lib/privacy/repository";
 
-import type { SavedResume } from "./saved-types";
+import type { SavedResume, SaveSavedResumeResult } from "./saved-types";
 import { parseSavedResume } from "./saved-validation";
 
 const SAVED_RESUME_DOCUMENT = "current";
@@ -40,12 +44,23 @@ export class FirestoreSavedResumeRepository {
     });
   }
 
-  async save(userId: string, savedResume: SavedResume): Promise<SavedResume> {
+  async exists(userId: string): Promise<boolean> {
+    return (await this.document(userId).get()).exists;
+  }
+
+  async save(
+    userId: string,
+    savedResume: SavedResume,
+  ): Promise<SaveSavedResumeResult> {
     const normalized = parseSavedResume(savedResume);
     const firestore = this.getFirestore();
     const document = this.document(userId, firestore);
+    const privacyDocument = resumePrivacyDocument(firestore, userId);
 
-    await firestore.runTransaction(async (transaction) => {
+    const persisted = await firestore.runTransaction(async (transaction) => {
+      const privacySnapshot = await transaction.get(privacyDocument);
+      if (!readSaveResumeDataSetting(privacySnapshot)) return false;
+
       const snapshot = await transaction.get(document);
       const timestamp = this.now();
       const existingCreatedAt = snapshot.exists
@@ -64,9 +79,14 @@ export class FirestoreSavedResumeRepository {
       };
 
       transaction.set(document, storedResume);
+      return true;
     });
 
-    return normalized;
+    return { savedResume: normalized, persisted };
+  }
+
+  async delete(userId: string): Promise<void> {
+    await this.document(userId).delete();
   }
 
   private document(userId: string, firestore = this.getFirestore()) {
