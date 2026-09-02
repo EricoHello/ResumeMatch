@@ -79,6 +79,12 @@ users/{uid}/pointHistory/{sha256(kind + idempotencyKey)}
   description: string
   idempotencyKey: string
   timestamp: timestamp
+
+users/{uid}/pointRewardEligibility/{searchId}
+  schemaVersion: 1
+  clickTokenHashes: string[]
+  createdAt: timestamp
+  expiresAt: timestamp
 ```
 
 `earnPoints` and `spendPoints` are server-only functions. Each mutation runs in one Firestore transaction so the aggregate balance and ledger cannot diverge. The deterministic history document ID makes a stable action occurrence safe to retry; reusing its idempotency key returns the original event without applying the amount again. Ordinary spends require enough balance. A trusted post-paid operation may explicitly allow a negative balance, but no current feature does so.
@@ -86,6 +92,8 @@ users/{uid}/pointHistory/{sha256(kind + idempotencyKey)}
 `GET /api/points` returns the authenticated user's aggregate totals and 50 most recent history entries. It does not expose a generic mutation endpoint.
 
 Guest points use session storage plus an in-memory fallback and are cleared with the guest session. They are never written to Firestore.
+
+Each successful live job search receives one opaque reward token per displayed card. For signed-in users, only token hashes and a 24-hour expiration are stored; job titles, companies, URLs, and other result data are not persisted. `POST /api/points/job-click` verifies the authenticated user, search, card index, and token before awarding 10 points. The three card-specific ledger keys prevent repeat awards, and the all-three ledger key grants the 5-point bonus only once. Completed eligibility is deleted after the bonus; incomplete records are safe to remove after `expiresAt`.
 
 ## Account data actions
 
@@ -101,5 +109,5 @@ Guest points use session storage plus an in-memory fallback and are cleared with
 - The UID always comes from the verified token, never request JSON, query parameters, or a browser-selected path.
 - Data exports require a verified email claim and use it as the sole recipient.
 - The preference, privacy-setting, and saved-resume APIs apply strict schema and size validation.
-- Firestore rules allow owner-scoped reads of preferences, point aggregates, and point history. Point writes and resume profiles remain server-managed; unmatched paths are denied.
+- Firestore rules allow owner-scoped reads of preferences, point aggregates, and point history. Point writes, reward eligibility, and resume profiles remain server-managed; unmatched paths are denied.
 - Firebase Admin operations bypass Firestore rules, so API authentication, validation, and exact path construction remain mandatory.

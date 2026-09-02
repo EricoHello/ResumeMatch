@@ -1,4 +1,5 @@
 import type { ResumeProfile } from "@/lib/analysis/types";
+import type { JobClickRewardContext } from "@/lib/points/job-click-types";
 
 export type SearchJobsRequest = {
   profile: ResumeProfile;
@@ -20,12 +21,20 @@ export type JobMatch = {
 export type SearchJobsSuccessResponse = {
   jobs: JobMatch[];
   searchedAt: string;
+  rewardContext: JobClickRewardContext | null;
+};
+
+export type SearchJobsResult = {
+  jobs: JobMatch[];
+  rewardContext: JobClickRewardContext | null;
 };
 
 export type SearchJobsErrorCode =
   | "INVALID_REQUEST"
   | "REQUEST_TOO_LARGE"
   | "INVALID_SEARCH_INPUT"
+  | "AUTH_REQUIRED"
+  | "AUTH_UNAVAILABLE"
   | "RATE_LIMITED"
   | "SEARCH_UNAVAILABLE"
   | "SEARCH_FAILED";

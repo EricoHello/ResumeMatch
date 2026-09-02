@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Account } from "@/components/account";
 import type { ResumeProfile } from "@/lib/analysis/types";
+import type { PointAccountViewState } from "@/lib/points/types";
 import {
   beginGuestSession,
   clearGuestSession,
@@ -34,6 +35,39 @@ const SESSION_PROFILE: ResumeProfile = {
 const RESUME_PRIVACY_ON = {
   status: "ready" as const,
   privacy: { saveResumeData: true, hasSavedResumeData: true },
+};
+
+const SIGNED_IN_POINTS: PointAccountViewState = {
+  status: "ready",
+  snapshot: {
+    points: { balance: 25, totalEarned: 30, totalSpent: 5 },
+    history: [
+      {
+        id: "earn-job-one",
+        kind: "earn",
+        action: "job_click",
+        amount: 10,
+        description: "Viewed a suggested job",
+        timestamp: "2026-08-31T18:30:00.000Z",
+      },
+      {
+        id: "spend-example",
+        kind: "spend",
+        action: "example_spend",
+        amount: -5,
+        description: "Used points on an example reward",
+        timestamp: "2026-08-30T16:00:00.000Z",
+      },
+    ],
+  },
+};
+
+const GUEST_POINTS: PointAccountViewState = {
+  status: "ready",
+  snapshot: {
+    points: { balance: 10, totalEarned: 10, totalSpent: 0 },
+    history: [],
+  },
 };
 
 function signedInUser() {
@@ -89,10 +123,12 @@ describe("Account", () => {
         firebaseAvailable
         authBusy={false}
         authMessage={null}
+        pointsState={SIGNED_IN_POINTS}
         onBack={vi.fn()}
         onGoogleSignIn={vi.fn()}
         onSignOut={onSignOut}
         onLeaveGuestMode={vi.fn()}
+        onReloadPoints={vi.fn()}
         onDataDeleted={vi.fn()}
         resumePrivacyState={RESUME_PRIVACY_ON}
         onResumePrivacyChange={vi.fn()}
@@ -108,6 +144,17 @@ describe("Account", () => {
     expect(screen.getByText("$120,000 / year")).toBeTruthy();
     expect(screen.getByText("Senior Frontend Engineer")).toBeTruthy();
     expect(screen.getByText("Mid")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Points & rewards" })).toBeTruthy();
+    expect(screen.getByLabelText("Current point balance").textContent).toBe(
+      "25pts",
+    );
+    expect(screen.getByText("30 pts")).toBeTruthy();
+    expect(screen.getByText("5 pts")).toBeTruthy();
+    expect(screen.getByText("Persistent account history")).toBeTruthy();
+    expect(screen.getByText("Viewed a suggested job")).toBeTruthy();
+    expect(screen.getByText("+10 pts")).toBeTruthy();
+    expect(screen.getByText("Used points on an example reward")).toBeTruthy();
+    expect(screen.getByText("-5 pts")).toBeTruthy();
     expect(
       screen
         .getByRole("switch", { name: "Save my resume for future sessions" })
@@ -145,10 +192,12 @@ describe("Account", () => {
         firebaseAvailable
         authBusy={false}
         authMessage={null}
+        pointsState={GUEST_POINTS}
         onBack={vi.fn()}
         onGoogleSignIn={onGoogleSignIn}
         onSignOut={vi.fn()}
         onLeaveGuestMode={vi.fn()}
+        onReloadPoints={vi.fn()}
         onDataDeleted={vi.fn()}
         resumePrivacyState={{ status: "loading" }}
         onResumePrivacyChange={vi.fn()}
@@ -161,6 +210,12 @@ describe("Account", () => {
     expect(screen.getByText(/stored only for this browser-tab session/i)).toBeTruthy();
     expect(screen.getAllByText("Remote")).toHaveLength(2);
     expect(screen.getByText("$95,000 / year")).toBeTruthy();
+    expect(screen.getByLabelText("Current point balance").textContent).toBe(
+      "10pts",
+    );
+    expect(
+      screen.getByText("Clears when this guest session ends"),
+    ).toBeTruthy();
     expect(fetch).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Send My Data" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete My Data" })).toBeNull();
@@ -186,10 +241,12 @@ describe("Account", () => {
         firebaseAvailable
         authBusy={false}
         authMessage={null}
+        pointsState={SIGNED_IN_POINTS}
         onBack={vi.fn()}
         onGoogleSignIn={vi.fn()}
         onSignOut={vi.fn()}
         onLeaveGuestMode={vi.fn()}
+        onReloadPoints={vi.fn()}
         onDataDeleted={vi.fn()}
         resumePrivacyState={RESUME_PRIVACY_ON}
         onResumePrivacyChange={vi.fn()}
@@ -230,10 +287,12 @@ describe("Account", () => {
         firebaseAvailable
         authBusy={false}
         authMessage={null}
+        pointsState={SIGNED_IN_POINTS}
         onBack={vi.fn()}
         onGoogleSignIn={vi.fn()}
         onSignOut={vi.fn()}
         onLeaveGuestMode={vi.fn()}
+        onReloadPoints={vi.fn()}
         onDataDeleted={onDataDeleted}
         resumePrivacyState={RESUME_PRIVACY_ON}
         onResumePrivacyChange={vi.fn()}
@@ -297,10 +356,12 @@ describe("Account", () => {
         firebaseAvailable
         authBusy={false}
         authMessage={null}
+        pointsState={SIGNED_IN_POINTS}
         onBack={vi.fn()}
         onGoogleSignIn={vi.fn()}
         onSignOut={vi.fn()}
         onLeaveGuestMode={vi.fn()}
+        onReloadPoints={vi.fn()}
         onDataDeleted={vi.fn()}
         resumePrivacyState={RESUME_PRIVACY_ON}
         onResumePrivacyChange={onResumePrivacyChange}

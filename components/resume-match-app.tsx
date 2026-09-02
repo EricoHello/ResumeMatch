@@ -39,6 +39,10 @@ import type { JobPreferences as JobPreferencesValue } from "@/lib/preferences/ty
 import type { ResumeProfile } from "@/lib/analysis/types";
 import { loadResumePrivacySettings } from "@/lib/privacy/client";
 import type { ResumePrivacyStatus } from "@/lib/privacy/types";
+import { loadPoints } from "@/lib/points/client";
+import { readGuestPoints } from "@/lib/points/guest";
+import type { AwardJobClickResult } from "@/lib/points/job-click-types";
+import type { PointAccountViewState } from "@/lib/points/types";
 import {
   loadSavedResume,
   saveSavedResume,
@@ -96,13 +100,33 @@ function GoogleIcon() {
   );
 }
 
+function PointCounter({ state }: { state: PointAccountViewState }) {
+  const balance = state.status === "ready" ? state.snapshot.points.balance : null;
+  const label =
+    balance === null
+      ? state.status === "loading"
+        ? "Point balance loading"
+        : "Point balance unavailable"
+      : `Point balance: ${balance} ${balance === 1 ? "point" : "points"}`;
+
+  return (
+    <span className="nav-points-counter" aria-label={label}>
+      <span aria-hidden="true">✦</span>
+      <strong>{balance ?? "—"}</strong>
+      <small>pts</small>
+    </span>
+  );
+}
+
 function ResumeJourney({
   identity,
   onProfileChange,
+  onPointsAwarded,
   saveResumeData,
 }: {
   identity: PreferenceIdentity;
   onProfileChange: (profile: ResumeProfile | null) => void;
+  onPointsAwarded: (result: AwardJobClickResult) => void;
   saveResumeData: boolean;
 }) {
   const signedInUser = identity.kind === "user" ? identity.user : null;
@@ -516,7 +540,11 @@ function ResumeJourney({
         />
       )}
       {analysisState?.status === "success" && (
-        <JobSearch profile={analysisState.profile} />
+        <JobSearch
+          profile={analysisState.profile}
+          identity={identity}
+          onPointsAwarded={onPointsAwarded}
+        />
       )}
     </div>
   );
@@ -534,10 +562,58 @@ export function ResumeMatchApp() {
     useState<UserResumePrivacyState | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [pointAccountState, setPointAccountState] = useState<{
+    identityKey: string;
+    view: PointAccountViewState;
+  } | null>(null);
   const choiceHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const mainHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const resumePrivacyRequestRef = useRef<AbortController | null>(null);
+  const pointsRequestRef = useRef<AbortController | null>(null);
   const firebaseAvailable = isFirebaseClientConfigured();
+
+  const loadSignedInPoints = useCallback(
+    async (user: User, preserveCurrent: boolean) => {
+      pointsRequestRef.current?.abort();
+      const controller = new AbortController();
+      pointsRequestRef.current = controller;
+      const identityKey = `user:${user.uid}`;
+
+      if (!preserveCurrent) {
+        setPointAccountState({
+          identityKey,
+          view: { status: "loading" },
+        });
+      }
+
+      try {
+        const snapshot = await loadPoints(user, controller.signal);
+        if (controller.signal.aborted) return;
+        setPointAccountState({
+          identityKey,
+          view: { status: "ready", snapshot },
+        });
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        if (preserveCurrent) return;
+        setPointAccountState({
+          identityKey,
+          view: {
+            status: "error",
+            message:
+              error instanceof Error
+                ? error.message
+                : "We couldn’t load your points.",
+          },
+        });
+      } finally {
+        if (pointsRequestRef.current === controller) {
+          pointsRequestRef.current = null;
+        }
+      }
+    },
+    [],
+  );
 
   const loadResumePrivacy = useCallback(async (user: User) => {
     resumePrivacyRequestRef.current?.abort();
@@ -655,6 +731,31 @@ export function ResumeMatchApp() {
   }, []);
 
   useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (authState.status === "user") {
+        void loadSignedInPoints(authState.user, false);
+        return;
+      }
+
+      pointsRequestRef.current?.abort();
+      pointsRequestRef.current = null;
+      if (authState.status === "guest") {
+        setPointAccountState({
+          identityKey: "guest",
+          view: { status: "ready", snapshot: readGuestPoints() },
+        });
+      } else {
+        setPointAccountState(null);
+      }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      pointsRequestRef.current?.abort();
+    };
+  }, [authState, loadSignedInPoints]);
+
+  useEffect(() => {
     if (authState.status !== "user") {
       resumePrivacyRequestRef.current?.abort();
       resumePrivacyRequestRef.current = null;
@@ -752,6 +853,62 @@ export function ResumeMatchApp() {
     identityKey && sessionProfile?.identityKey === identityKey
       ? sessionProfile.profile
       : null;
+  const pointsViewState: PointAccountViewState =
+    identityKey && pointAccountState?.identityKey === identityKey
+      ? pointAccountState.view
+      : { status: "loading" };
+
+  const handlePointsAwarded = useCallback(
+    (result: AwardJobClickResult) => {
+      if (authState.status === "guest") {
+        setPointAccountState({
+          identityKey: "guest",
+          view: { status: "ready", snapshot: readGuestPoints() },
+        });
+        return;
+      }
+      if (authState.status !== "user") return;
+
+      const userIdentityKey = `user:${authState.user.uid}`;
+      setPointAccountState((current) => {
+        const currentSnapshot =
+          current?.identityKey === userIdentityKey &&
+          current.view.status === "ready"
+            ? current.view.snapshot
+            : null;
+        const resultIsCurrent =
+          !currentSnapshot ||
+          (result.points.totalEarned >= currentSnapshot.points.totalEarned &&
+            result.points.totalSpent >= currentSnapshot.points.totalSpent);
+
+        return {
+          identityKey: userIdentityKey,
+          view: {
+            status: "ready",
+            snapshot: {
+              points: resultIsCurrent
+                ? result.points
+                : currentSnapshot.points,
+              history: currentSnapshot?.history ?? [],
+            },
+          },
+        };
+      });
+      void loadSignedInPoints(authState.user, true);
+    },
+    [authState, loadSignedInPoints],
+  );
+
+  const reloadCurrentPoints = useCallback(() => {
+    if (authState.status === "user") {
+      void loadSignedInPoints(authState.user, false);
+    } else if (authState.status === "guest") {
+      setPointAccountState({
+        identityKey: "guest",
+        view: { status: "ready", snapshot: readGuestPoints() },
+      });
+    }
+  }, [authState, loadSignedInPoints]);
 
   const showMatchView = () => {
     setActiveView("match");
@@ -785,14 +942,17 @@ export function ResumeMatchApp() {
         <div className="nav-actions">
           <span className="version-pill">AI resume intake</span>
           {identity && (
-            <button
-              className="nav-account-button"
-              type="button"
-              aria-current={activeView === "account" ? "page" : undefined}
-              onClick={() => setActiveView("account")}
-            >
-              Account
-            </button>
+            <>
+              <PointCounter state={pointsViewState} />
+              <button
+                className="nav-account-button"
+                type="button"
+                aria-current={activeView === "account" ? "page" : undefined}
+                onClick={() => setActiveView("account")}
+              >
+                Account
+              </button>
+            </>
           )}
           <ThemeToggle />
         </div>
@@ -891,6 +1051,7 @@ export function ResumeMatchApp() {
                 key={`${identityKey}:${accountDataVersion}`}
                 identity={identity}
                 onProfileChange={handleProfileChange}
+                onPointsAwarded={handlePointsAwarded}
                 saveResumeData={Boolean(saveResumeData)}
               />
 
@@ -918,10 +1079,12 @@ export function ResumeMatchApp() {
             firebaseAvailable={firebaseAvailable}
             authBusy={authBusy}
             authMessage={authMessage}
+            pointsState={pointsViewState}
             onBack={showMatchView}
             onGoogleSignIn={() => void googleSignIn()}
             onSignOut={() => void googleSignOut()}
             onLeaveGuestMode={leaveGuestMode}
+            onReloadPoints={reloadCurrentPoints}
             resumePrivacyState={resumePrivacyState}
             onResumePrivacyChange={(privacy: ResumePrivacyStatus) => {
               if (identity.kind !== "user") return;
@@ -942,6 +1105,24 @@ export function ResumeMatchApp() {
             onDataDeleted={() => {
               setSessionProfile(null);
               setAccountDataVersion((version) => version + 1);
+              pointsRequestRef.current?.abort();
+              pointsRequestRef.current = null;
+              if (identityKey) {
+                setPointAccountState({
+                  identityKey,
+                  view: {
+                    status: "ready",
+                    snapshot: {
+                      points: {
+                        balance: 0,
+                        totalEarned: 0,
+                        totalSpent: 0,
+                      },
+                      history: [],
+                    },
+                  },
+                });
+              }
               if (identity.kind === "user") {
                 setUserResumePrivacy({
                   userId: identity.user.uid,

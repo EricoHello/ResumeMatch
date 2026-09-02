@@ -209,6 +209,37 @@ export class FirestorePointsRepository {
     );
   }
 
+  async hasEarnings(userId: string, idempotencyKeys: string[]) {
+    if (
+      idempotencyKeys.length < 1 ||
+      idempotencyKeys.length > 10 ||
+      idempotencyKeys.some(
+        (key) =>
+          typeof key !== "string" || key.length < 1 || key.length > 240,
+      )
+    ) {
+      throw new Error("The earning keys are invalid.");
+    }
+
+    const firestore = this.getFirestore();
+    const historyCollection = this.userDocument(userId, firestore).collection(
+      "pointHistory",
+    );
+    const documents = idempotencyKeys.map((key) =>
+      historyCollection.doc(historyDocumentId("earn", key)),
+    );
+    const snapshots = await firestore.getAll(...documents);
+
+    return snapshots.every((snapshot, index) => {
+      if (!snapshot.exists) return false;
+      const entry = parseStoredHistoryEntry(snapshot);
+      return (
+        entry.kind === "earn" &&
+        entry.idempotencyKey === idempotencyKeys[index]
+      );
+    });
+  }
+
   private async mutate(
     userId: string,
     kind: PointTransactionKind,

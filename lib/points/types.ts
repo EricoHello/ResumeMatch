@@ -20,6 +20,11 @@ export type PointAccountSnapshot = {
   history: PointHistoryEntry[];
 };
 
+export type PointAccountViewState =
+  | { status: "loading" }
+  | { status: "ready"; snapshot: PointAccountSnapshot }
+  | { status: "error"; message: string };
+
 export type PointMutationInput = {
   amount: number;
   action: string;
@@ -65,4 +70,3 @@ export type PointsErrorResponse = {
 export function emptyPointBalance(): PointBalance {
   return { balance: 0, totalEarned: 0, totalSpent: 0 };
 }
-

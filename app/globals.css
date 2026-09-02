@@ -97,6 +97,35 @@ button {
   gap: 10px;
 }
 
+.nav-points-counter {
+  min-height: 32px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #cfe6dc;
+  border-radius: 999px;
+  color: var(--success);
+  background: var(--success-soft);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.nav-points-counter > span {
+  font-size: 10px;
+}
+
+.nav-points-counter strong {
+  font-size: 12px;
+}
+
+.nav-points-counter small {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
 .theme-toggle {
   width: 36px;
   height: 36px;
@@ -650,6 +679,167 @@ button {
 .account-status-badge--guest {
   color: var(--warning);
   background: var(--warning-soft);
+}
+
+.account-points-card {
+  display: grid;
+  gap: 18px;
+}
+
+.account-points-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.account-point-balance {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  border-radius: 999px;
+  color: var(--success);
+  background: var(--success-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.account-point-balance strong {
+  font-size: 22px;
+  letter-spacing: -0.035em;
+}
+
+.account-point-balance span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.account-point-totals {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.account-point-totals div {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid #e5e8ef;
+  border-radius: 11px;
+  background: #fafbfe;
+}
+
+.account-point-totals dt {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.account-point-totals dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 780;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-point-history-heading {
+  padding-top: 16px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.account-point-history-heading h3 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+
+.account-point-history-heading span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.account-point-history {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  list-style: none;
+}
+
+.account-point-history li {
+  min-width: 0;
+  padding: 11px 12px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e5e8ef;
+  border-radius: 11px;
+  background: #fafbfe;
+}
+
+.account-point-kind {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.account-point-kind--earn {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.account-point-kind--spend {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.account-point-event {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.account-point-event strong {
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.account-point-event time {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.account-point-amount {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.account-point-amount--earn {
+  color: var(--success);
+}
+
+.account-point-amount--spend {
+  color: var(--warning);
 }
 
 .account-grid {
@@ -2036,6 +2226,19 @@ input:disabled {
   line-height: 1.5;
 }
 
+.job-points-status {
+  width: fit-content;
+  margin: -5px 2px 14px;
+  padding: 5px 9px;
+  border: 1px solid #cde9dc;
+  border-radius: 999px;
+  color: var(--success);
+  background: var(--success-soft);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+}
+
 .job-list {
   margin: 0;
   padding: 0;
@@ -2213,7 +2416,8 @@ input:disabled {
 }
 
 :root[data-theme="dark"] .theme-toggle,
-:root[data-theme="dark"] .nav-account-button {
+:root[data-theme="dark"] .nav-account-button,
+:root[data-theme="dark"] .nav-points-counter {
   border-color: #3c4963;
 }
 
@@ -2253,6 +2457,8 @@ input:disabled {
 }
 
 :root[data-theme="dark"] .account-facts div,
+:root[data-theme="dark"] .account-point-totals div,
+:root[data-theme="dark"] .account-point-history li,
 :root[data-theme="dark"] .dropzone,
 :root[data-theme="dark"] .dropzone--uploading,
 :root[data-theme="dark"] .dropzone--parsing,
@@ -2414,6 +2620,14 @@ input:disabled {
     gap: 6px;
   }
 
+  .nav-points-counter {
+    padding: 0 8px;
+  }
+
+  .nav-points-counter small {
+    display: none;
+  }
+
   .page-content {
     margin-top: 38px;
   }
@@ -2468,6 +2682,16 @@ input:disabled {
 
   .account-grid {
     grid-template-columns: 1fr;
+  }
+
+  .account-point-history-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .account-point-history-heading span {
+    text-align: left;
   }
 
   .account-data-card {

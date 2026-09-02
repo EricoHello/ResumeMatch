@@ -2,18 +2,31 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { PreferenceIdentity } from "@/components/job-preferences";
 import type { ResumeProfile } from "@/lib/analysis/types";
 import {
   JobSearchClientError,
   searchJobs,
 } from "@/lib/jobs/client";
 import type { JobMatch } from "@/lib/jobs/types";
+import {
+  awardGuestJobClick,
+  awardSignedInJobClick,
+} from "@/lib/points/job-click-client";
+import type {
+  AwardJobClickResult,
+  JobClickRewardContext,
+} from "@/lib/points/job-click-types";
 
 type JobSearchState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; message: string; retryAfterSeconds?: number }
-  | { status: "success"; jobs: JobMatch[] };
+  | {
+      status: "success";
+      jobs: JobMatch[];
+      rewardContext: JobClickRewardContext | null;
+    };
 
 function employmentLabel(value: string | null) {
   if (!value) return null;
@@ -66,7 +79,7 @@ function SearchRetry({
   );
 }
 
-function JobCard({ job }: { job: JobMatch }) {
+function JobCard({ job, onApply }: { job: JobMatch; onApply: () => void }) {
   const details = [
     employmentLabel(job.employmentType),
     job.postedAt,
@@ -111,6 +124,10 @@ function JobCard({ job }: { job: JobMatch }) {
         href={job.applyUrl}
         target="_blank"
         rel="noopener noreferrer"
+        onClick={onApply}
+        onAuxClick={(event) => {
+          if (event.button === 1) onApply();
+        }}
       >
         View &amp; apply
         <span aria-hidden="true">↗</span>
@@ -119,13 +136,28 @@ function JobCard({ job }: { job: JobMatch }) {
   );
 }
 
-export function JobSearch({ profile }: { profile: ResumeProfile }) {
+export function JobSearch({
+  profile,
+  identity,
+  onPointsAwarded,
+}: {
+  profile: ResumeProfile;
+  identity: PreferenceIdentity;
+  onPointsAwarded?: (result: AwardJobClickResult) => void;
+}) {
   const [state, setState] = useState<JobSearchState>({ status: "idle" });
+  const [rewardMessage, setRewardMessage] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
+  const rewardTimeoutRef = useRef<number | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
 
   useEffect(() => {
-    return () => requestRef.current?.abort();
+    return () => {
+      requestRef.current?.abort();
+      if (rewardTimeoutRef.current !== null) {
+        window.clearTimeout(rewardTimeoutRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -139,11 +171,20 @@ export function JobSearch({ profile }: { profile: ResumeProfile }) {
     const controller = new AbortController();
     requestRef.current = controller;
     setState({ status: "loading" });
+    if (rewardTimeoutRef.current !== null) {
+      window.clearTimeout(rewardTimeoutRef.current);
+      rewardTimeoutRef.current = null;
+    }
+    setRewardMessage(null);
 
     try {
-      const jobs = await searchJobs(profile, controller.signal);
+      const result = await searchJobs(
+        profile,
+        controller.signal,
+        identity.kind === "user" ? identity.user : null,
+      );
       if (controller.signal.aborted || requestRef.current !== controller) return;
-      setState({ status: "success", jobs });
+      setState({ status: "success", ...result });
     } catch (error) {
       if (controller.signal.aborted || requestRef.current !== controller) return;
       setState({
@@ -160,7 +201,54 @@ export function JobSearch({ profile }: { profile: ResumeProfile }) {
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
     }
-  }, [profile]);
+  }, [identity, profile]);
+
+  const showReward = useCallback((result: AwardJobClickResult) => {
+    const earned =
+      (result.clickAwarded ? 10 : 0) + (result.bonusAwarded ? 5 : 0);
+    if (earned === 0) return;
+    setRewardMessage(
+      result.clickAwarded && result.bonusAwarded
+        ? "+10 pts · +5 bonus"
+        : result.clickAwarded
+          ? "+10 pts"
+          : "+5 bonus",
+    );
+    if (rewardTimeoutRef.current !== null) {
+      window.clearTimeout(rewardTimeoutRef.current);
+    }
+    rewardTimeoutRef.current = window.setTimeout(() => {
+      setRewardMessage(null);
+      rewardTimeoutRef.current = null;
+    }, 2600);
+    onPointsAwarded?.(result);
+  }, [onPointsAwarded]);
+
+  const handleJobClick = useCallback(
+    (context: JobClickRewardContext, jobIndex: number) => {
+      if (rewardTimeoutRef.current !== null) {
+        window.clearTimeout(rewardTimeoutRef.current);
+        rewardTimeoutRef.current = null;
+      }
+      setRewardMessage(null);
+      if (identity.kind === "guest") {
+        try {
+          showReward(awardGuestJobClick(context, jobIndex));
+        } catch {
+          // Opening the job remains the primary action if points are unavailable.
+        }
+        return;
+      }
+
+      void awardSignedInJobClick(identity.user, context, jobIndex).then(
+        showReward,
+        () => {
+          // Opening the job remains the primary action if points are unavailable.
+        },
+      );
+    },
+    [identity, showReward],
+  );
 
   const heading =
     state.status === "idle"
@@ -256,8 +344,23 @@ export function JobSearch({ profile }: { profile: ResumeProfile }) {
                   <p>Jobs without published salary information remain eligible.</p>
                 </div>
               </div>
+              {rewardMessage && (
+                <p className="job-points-status" role="status" aria-live="polite">
+                  {rewardMessage}
+                </p>
+              )}
               <ol className="job-list" aria-label="Relevant job matches">
-                {state.jobs.map((job) => <JobCard key={job.id} job={job} />)}
+                {state.jobs.map((job, jobIndex) => (
+                  <JobCard
+                    key={job.id}
+                    job={job}
+                    onApply={() => {
+                      if (state.rewardContext) {
+                        handleJobClick(state.rewardContext, jobIndex);
+                      }
+                    }}
+                  />
+                ))}
               </ol>
             </>
           ) : (

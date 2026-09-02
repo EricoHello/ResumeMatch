@@ -371,6 +371,41 @@ describe("Firestore job-preference rules", () => {
     );
   });
 
+  it("keeps job-click reward eligibility server-only", async () => {
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(
+          context.firestore(),
+          "users/alice/pointRewardEligibility/search-123",
+        ),
+        {
+          schemaVersion: 1,
+          clickTokenHashes: ["a".repeat(64)],
+          createdAt: Timestamp.fromMillis(1_750_000_000_000),
+          expiresAt: Timestamp.fromMillis(1_750_086_400_000),
+        },
+      );
+    });
+
+    const aliceDb = testEnvironment.authenticatedContext("alice").firestore();
+    const eligibilityRef = doc(
+      aliceDb,
+      "users/alice/pointRewardEligibility/search-123",
+    );
+
+    await assertFails(getDoc(eligibilityRef));
+    await assertFails(
+      setDoc(
+        doc(
+          aliceDb,
+          "users/alice/pointRewardEligibility/invented-search",
+        ),
+        { clickTokenHashes: ["fake"] },
+      ),
+    );
+    await assertFails(deleteDoc(eligibilityRef));
+  });
+
   it("denies documents outside the explicitly allowed preference path", async () => {
     const aliceDb = testEnvironment.authenticatedContext("alice").firestore();
 

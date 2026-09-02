@@ -10,6 +10,7 @@ import {
   spendGuestPoints,
 } from "@/lib/points/guest";
 import { PointIdempotencyConflictError } from "@/lib/points/validation";
+import { awardGuestJobClick } from "@/lib/points/job-click-client";
 import { beginGuestSession, clearGuestSession } from "@/lib/session/guest-session";
 
 const AWARD = {
@@ -87,5 +88,30 @@ describe("guest points", () => {
         idempotencyKey: "guest-session:spend-1",
       }),
     ).toThrow(InsufficientGuestPointsError);
+  });
+
+  it("awards each displayed job once and adds one all-three bonus", () => {
+    const context = {
+      searchId: "search-123",
+      clickTokens: ["token-one", "token-two", "token-three"],
+    };
+
+    expect(awardGuestJobClick(context, 0).points.balance).toBe(10);
+    expect(awardGuestJobClick(context, 0)).toMatchObject({
+      clickAwarded: false,
+      points: { balance: 10 },
+    });
+    expect(awardGuestJobClick(context, 1).points.balance).toBe(20);
+    expect(awardGuestJobClick(context, 2)).toMatchObject({
+      clickAwarded: true,
+      bonusAwarded: true,
+      points: { balance: 35, totalEarned: 35, totalSpent: 0 },
+    });
+    expect(awardGuestJobClick(context, 2)).toMatchObject({
+      clickAwarded: false,
+      bonusAwarded: false,
+      points: { balance: 35 },
+    });
+    expect(readGuestPoints().history).toHaveLength(4);
   });
 });

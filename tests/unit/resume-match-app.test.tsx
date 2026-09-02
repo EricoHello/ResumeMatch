@@ -30,6 +30,11 @@ const privacyMocks = vi.hoisted(() => ({
   save: vi.fn(),
 }));
 
+const pointsMocks = vi.hoisted(() => ({
+  load: vi.fn(),
+  readGuest: vi.fn(),
+}));
+
 vi.mock("firebase/auth", () => ({
   browserLocalPersistence: { name: "browser-local" },
   onAuthStateChanged: authMocks.onAuthStateChanged,
@@ -58,6 +63,14 @@ vi.mock("@/lib/resume/saved-client", () => ({
 vi.mock("@/lib/privacy/client", () => ({
   loadResumePrivacySettings: privacyMocks.load,
   saveResumePrivacySettings: privacyMocks.save,
+}));
+
+vi.mock("@/lib/points/client", () => ({
+  loadPoints: pointsMocks.load,
+}));
+
+vi.mock("@/lib/points/guest", () => ({
+  readGuestPoints: pointsMocks.readGuest,
 }));
 
 vi.mock("@/lib/analysis/client", () => ({
@@ -177,6 +190,8 @@ describe("ResumeMatchApp authentication recovery", () => {
     analysisMocks.analyze.mockReset();
     privacyMocks.load.mockReset();
     privacyMocks.save.mockReset();
+    pointsMocks.load.mockReset();
+    pointsMocks.readGuest.mockReset();
     savedResumeMocks.load.mockResolvedValue(null);
     savedResumeMocks.save.mockImplementation(async (_user, savedResume) => ({
       savedResume,
@@ -185,6 +200,14 @@ describe("ResumeMatchApp authentication recovery", () => {
     privacyMocks.load.mockResolvedValue({
       saveResumeData: true,
       hasSavedResumeData: false,
+    });
+    pointsMocks.load.mockResolvedValue({
+      points: { balance: 42, totalEarned: 52, totalSpent: 10 },
+      history: [],
+    });
+    pointsMocks.readGuest.mockReturnValue({
+      points: { balance: 7, totalEarned: 7, totalSpent: 0 },
+      history: [],
     });
     analysisMocks.analyze.mockResolvedValue(PROFILE);
 
@@ -231,6 +254,9 @@ describe("ResumeMatchApp authentication recovery", () => {
     fireEvent.click(signIn);
 
     expect(await screen.findByText("Ada Lovelace")).toBeTruthy();
+    expect(
+      await screen.findByLabelText("Point balance: 42 points"),
+    ).toBeTruthy();
     expect(screen.getByTestId("resume-uploader")).toBeTruthy();
     expect(
       screen.getByText(/this browser may not remember it/i),
@@ -359,6 +385,9 @@ describe("ResumeMatchApp authentication recovery", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Continue as Guest" }),
     );
+    expect(
+      await screen.findByLabelText("Point balance: 7 points"),
+    ).toBeTruthy();
     fireEvent.click(
       await screen.findByRole("button", { name: "Simulate parsed resume" }),
     );

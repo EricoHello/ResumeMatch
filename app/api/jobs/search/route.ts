@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+import {
+  authenticateFirebaseRequest,
+  FirebaseAuthenticationError,
+} from "@/lib/firebase/auth";
 import { isMaintenanceMode, maintenanceResponse } from "@/lib/maintenance";
 import {
   JSearchConfigurationError,
@@ -20,6 +24,7 @@ import {
   JobSearchValidationError,
   parseSearchJobsRequest,
 } from "@/lib/jobs/validation";
+import { jobClickEligibility } from "@/lib/points/job-click-eligibility";
 
 export const runtime = "nodejs";
 export const MAX_JOB_SEARCH_REQUEST_BYTES = 64 * 1024;
@@ -93,6 +98,26 @@ export async function POST(request: Request) {
     return maintenanceResponse();
   }
 
+  let rewardUserId: string | null = null;
+  if (request.headers.has("authorization")) {
+    try {
+      rewardUserId = await authenticateFirebaseRequest(request);
+    } catch (error) {
+      if (error instanceof FirebaseAuthenticationError) {
+        return errorResponse(
+          "AUTH_REQUIRED",
+          "Sign in again before searching for reward-eligible jobs.",
+          401,
+        );
+      }
+      return errorResponse(
+        "AUTH_UNAVAILABLE",
+        "We couldn't verify your sign-in right now. Please try again.",
+        503,
+      );
+    }
+  }
+
   const mediaType =
     request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() ??
     "";
@@ -147,9 +172,19 @@ export async function POST(request: Request) {
 
   try {
     const jobs = await jSearchClient.search(profile, request.signal);
+    let rewardContext = null;
+    try {
+      rewardContext = await jobClickEligibility.issue(
+        rewardUserId,
+        jobs.length,
+      );
+    } catch {
+      // Job results remain usable if reward eligibility is temporarily unavailable.
+    }
     const response: SearchJobsSuccessResponse = {
       jobs,
       searchedAt: new Date().toISOString(),
+      rewardContext,
     };
     return NextResponse.json(response, { headers: RESPONSE_HEADERS });
   } catch (error) {

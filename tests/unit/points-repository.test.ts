@@ -92,6 +92,9 @@ function createFirestoreDouble() {
   };
   const firestore = {
     collection: vi.fn(() => ({ doc: vi.fn(() => userReference) })),
+    getAll: vi.fn(async (...references: FakeReference[]) =>
+      references.map(snapshotFor),
+    ),
     runTransaction: vi.fn(
       async (callback: (value: typeof transaction) => Promise<unknown>) =>
         callback(transaction),
@@ -222,5 +225,33 @@ describe("FirestorePointsRepository", () => {
     });
     expect(snapshot.history).toHaveLength(1);
     expect(snapshot.history[0]).not.toHaveProperty("idempotencyKey");
+  });
+
+  it("checks a complete set of idempotent earning events", async () => {
+    const double = createFirestoreDouble();
+    const repository = new FirestorePointsRepository(
+      () => double.firestore as never,
+      () => NOW,
+    );
+    const secondAward = {
+      ...FIRST_AWARD,
+      idempotencyKey: "search-123:copy:2",
+    };
+    await repository.earn(USER_ID, FIRST_AWARD);
+
+    await expect(
+      repository.hasEarnings(USER_ID, [
+        FIRST_AWARD.idempotencyKey,
+        secondAward.idempotencyKey,
+      ]),
+    ).resolves.toBe(false);
+
+    await repository.earn(USER_ID, secondAward);
+    await expect(
+      repository.hasEarnings(USER_ID, [
+        FIRST_AWARD.idempotencyKey,
+        secondAward.idempotencyKey,
+      ]),
+    ).resolves.toBe(true);
   });
 });

@@ -34,11 +34,15 @@ async function responseMessage(response: Response) {
   return "We couldn't load your points. Please try again.";
 }
 
-export async function loadPoints(user: User): Promise<PointAccountSnapshot> {
+export async function loadPoints(
+  user: User,
+  signal?: AbortSignal,
+): Promise<PointAccountSnapshot> {
   const token = await user.getIdToken();
   const response = await fetch("/api/points", {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
+    signal,
   });
 
   if (!response.ok) {
@@ -48,4 +52,3 @@ export async function loadPoints(user: User): Promise<PointAccountSnapshot> {
   const body = (await response.json()) as PointsResponse;
   return parsePointAccountSnapshot(body.data);
 }
-

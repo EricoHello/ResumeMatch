@@ -2,6 +2,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+const authMocks = vi.hoisted(() => {
+  class TestFirebaseAuthenticationError extends Error {}
+  return {
+    authenticate: vi.fn(),
+    TestFirebaseAuthenticationError,
+  };
+});
+const rewardMocks = vi.hoisted(() => ({ issue: vi.fn() }));
+
+vi.mock("@/lib/firebase/auth", () => ({
+  authenticateFirebaseRequest: authMocks.authenticate,
+  FirebaseAuthenticationError: authMocks.TestFirebaseAuthenticationError,
+}));
+
+vi.mock("@/lib/points/job-click-eligibility", () => ({
+  jobClickEligibility: { issue: rewardMocks.issue },
+}));
+
 const jsearchMocks = vi.hoisted(() => {
   class TestConfigurationError extends Error {}
   class TestProviderError extends Error {
@@ -70,13 +88,24 @@ const JOBS = [
     matchedSkills: ["TypeScript"],
   },
 ];
+const REWARD_CONTEXT = {
+  searchId: "search-123",
+  clickTokens: ["click-token-1"],
+};
 
-function request(body: string, contentType = "application/json") {
+function request(
+  body: string,
+  contentType = "application/json",
+  authenticated = false,
+) {
   return new Request("http://localhost/api/jobs/search", {
     method: "POST",
     headers: {
       "content-type": contentType,
       "x-real-ip": "203.0.113.20",
+      ...(authenticated
+        ? { authorization: "Bearer test-id-token" }
+        : {}),
     },
     body,
   });
@@ -91,6 +120,8 @@ describe("POST /api/jobs/search", () => {
       remaining: 2,
     });
     rateLimitMocks.clientKey.mockClear();
+    authMocks.authenticate.mockReset().mockResolvedValue("verified-user");
+    rewardMocks.issue.mockReset().mockResolvedValue(REWARD_CONTEXT);
   });
 
   afterEach(() => {
@@ -109,6 +140,7 @@ describe("POST /api/jobs/search", () => {
     });
     expect(rateLimitMocks.consume).not.toHaveBeenCalled();
     expect(jsearchMocks.search).not.toHaveBeenCalled();
+    expect(rewardMocks.issue).not.toHaveBeenCalled();
   });
 
   it("searches once with the existing profile and returns no-store results", async () => {
@@ -120,8 +152,36 @@ describe("POST /api/jobs/search", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(body.jobs).toEqual(JOBS);
     expect(body.searchedAt).toEqual(expect.any(String));
+    expect(body.rewardContext).toEqual(REWARD_CONTEXT);
     expect(jsearchMocks.search).toHaveBeenCalledOnce();
     expect(jsearchMocks.search).toHaveBeenCalledWith(PROFILE, apiRequest.signal);
+    expect(authMocks.authenticate).not.toHaveBeenCalled();
+    expect(rewardMocks.issue).toHaveBeenCalledWith(null, JOBS.length);
+  });
+
+  it("registers signed-in search eligibility under the verified user", async () => {
+    const response = await POST(
+      request(JSON.stringify({ profile: PROFILE }), "application/json", true),
+    );
+
+    expect(response.status).toBe(200);
+    expect(authMocks.authenticate).toHaveBeenCalledOnce();
+    expect(rewardMocks.issue).toHaveBeenCalledWith("verified-user", JOBS.length);
+  });
+
+  it("rejects an invalid signed-in search before using job-search quota", async () => {
+    authMocks.authenticate.mockRejectedValue(
+      new authMocks.TestFirebaseAuthenticationError(),
+    );
+
+    const response = await POST(
+      request(JSON.stringify({ profile: PROFILE }), "application/json", true),
+    );
+
+    expect(response.status).toBe(401);
+    expect(rateLimitMocks.consume).not.toHaveBeenCalled();
+    expect(jsearchMocks.search).not.toHaveBeenCalled();
+    expect(rewardMocks.issue).not.toHaveBeenCalled();
   });
 
   it("rejects malformed, oversized, and extra input before using quota", async () => {

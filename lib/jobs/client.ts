@@ -1,6 +1,8 @@
 import type { ResumeProfile } from "@/lib/analysis/types";
+import type { User } from "firebase/auth";
+import { parseJobClickRewardContext } from "@/lib/points/job-click-validation";
 
-import type { JobMatch } from "./types";
+import type { JobMatch, SearchJobsResult } from "./types";
 
 const MAX_RETRY_AFTER_SECONDS = 24 * 60 * 60;
 
@@ -62,12 +64,18 @@ async function responseErrorMessage(response: Response) {
 export async function searchJobs(
   profile: ResumeProfile,
   signal: AbortSignal,
-): Promise<JobMatch[]> {
+  user: User | null = null,
+): Promise<SearchJobsResult> {
   let response: Response;
   try {
+    const token = user ? await user.getIdToken() : null;
+    if (signal.aborted) throw new DOMException("The request was aborted.", "AbortError");
     response = await fetch("/api/jobs/search", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ profile }),
       signal,
     });
@@ -104,5 +112,18 @@ export async function searchJobs(
     throw new JobSearchClientError("The job-search service returned an unexpected response.");
   }
 
-  return body.jobs;
+  let rewardContext;
+  try {
+    rewardContext = parseJobClickRewardContext(
+      "rewardContext" in body ? body.rewardContext : null,
+    );
+  } catch {
+    throw new JobSearchClientError("The job-search service returned an unexpected response.");
+  }
+
+  if (rewardContext && rewardContext.clickTokens.length !== body.jobs.length) {
+    throw new JobSearchClientError("The job-search service returned an unexpected response.");
+  }
+
+  return { jobs: body.jobs, rewardContext };
 }

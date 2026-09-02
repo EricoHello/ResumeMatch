@@ -13,6 +13,10 @@ import {
   type JobPreferences,
 } from "@/lib/preferences/types";
 import { parseJobPreferences } from "@/lib/preferences/validation";
+import type {
+  PointAccountViewState,
+  PointHistoryEntry,
+} from "@/lib/points/types";
 import { readGuestSession } from "@/lib/session/guest-session";
 import { deleteSavedResume } from "@/lib/resume/saved-client";
 
@@ -27,10 +31,12 @@ type AccountProps = {
   firebaseAvailable: boolean;
   authBusy: boolean;
   authMessage: string | null;
+  pointsState: PointAccountViewState;
   onBack: () => void;
   onGoogleSignIn: () => void;
   onSignOut: () => void;
   onLeaveGuestMode: () => void;
+  onReloadPoints: () => void;
   onDataDeleted: () => void;
   resumePrivacyState: ResumePrivacyViewState;
   onResumePrivacyChange: (privacy: ResumePrivacyStatus) => void;
@@ -111,6 +117,25 @@ function displayExperienceLevel(level: ResumeProfile["experienceLevel"]) {
   return `${level.charAt(0).toUpperCase()}${level.slice(1)}`;
 }
 
+const POINT_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+function pointTimestamp(timestamp: string) {
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime())
+    ? "Date unavailable"
+    : POINT_DATE_FORMATTER.format(date);
+}
+
+function pointAmount(entry: PointHistoryEntry) {
+  return `${entry.amount > 0 ? "+" : ""}${entry.amount} pts`;
+}
+
 function PreferencesSummary({
   preferences,
   emptyMessage,
@@ -168,10 +193,12 @@ export function Account({
   firebaseAvailable,
   authBusy,
   authMessage,
+  pointsState,
   onBack,
   onGoogleSignIn,
   onSignOut,
   onLeaveGuestMode,
+  onReloadPoints,
   onDataDeleted,
   resumePrivacyState,
   onResumePrivacyChange,
@@ -447,7 +474,7 @@ export function Account({
         <h1 id="account-heading" ref={headingRef} tabIndex={-1}>Account</h1>
         <p>
           {identity.kind === "user"
-            ? "Review the Google account and saved matching details ResumeMatch already uses."
+            ? "Review the Google account, matching details, and points ResumeMatch already uses."
             : "You’re using ResumeMatch privately without a persistent account."}
         </p>
       </div>
@@ -488,6 +515,102 @@ export function Account({
           </div>
         </section>
       )}
+
+      <section
+        className="account-card account-points-card"
+        aria-labelledby="account-points-heading"
+      >
+        <div className="account-points-heading">
+          <div>
+            <p className="step-label">
+              {identity.kind === "user" ? "Saved to your account" : "Current session"}
+            </p>
+            <h2 id="account-points-heading">Points &amp; rewards</h2>
+          </div>
+          {pointsState.status === "ready" && (
+            <div className="account-point-balance" aria-label="Current point balance">
+              <strong>{pointsState.snapshot.points.balance}</strong>
+              <span>pts</span>
+            </div>
+          )}
+        </div>
+
+        {pointsState.status === "loading" && (
+          <div className="inline-status" role="status">
+            <span className="spinner spinner--small" aria-hidden="true" />
+            Loading points…
+          </div>
+        )}
+
+        {pointsState.status === "error" && (
+          <div className="notice notice--error" role="alert">
+            <span className="notice-icon" aria-hidden="true">!</span>
+            <div>
+              <strong>Couldn’t load points</strong>
+              <p>{pointsState.message}</p>
+              <div className="notice-actions">
+                <button type="button" onClick={onReloadPoints}>
+                  Try again
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pointsState.status === "ready" && (
+          <>
+            <dl className="account-point-totals">
+              <div>
+                <dt>Total earned</dt>
+                <dd>{pointsState.snapshot.points.totalEarned} pts</dd>
+              </div>
+              <div>
+                <dt>Total spent</dt>
+                <dd>{pointsState.snapshot.points.totalSpent} pts</dd>
+              </div>
+            </dl>
+
+            <div className="account-point-history-heading">
+              <h3>Point history</h3>
+              <span>
+                {identity.kind === "user"
+                  ? "Persistent account history"
+                  : "Clears when this guest session ends"}
+              </span>
+            </div>
+
+            {pointsState.snapshot.history.length === 0 ? (
+              <p className="account-empty">
+                No point activity yet. View a suggested job to start earning.
+              </p>
+            ) : (
+              <ol className="account-point-history">
+                {pointsState.snapshot.history.map((entry) => (
+                  <li key={entry.id}>
+                    <span
+                      className={`account-point-kind account-point-kind--${entry.kind}`}
+                      aria-hidden="true"
+                    >
+                      {entry.kind === "earn" ? "+" : "−"}
+                    </span>
+                    <span className="account-point-event">
+                      <strong>{entry.description}</strong>
+                      <time dateTime={entry.timestamp}>
+                        {pointTimestamp(entry.timestamp)}
+                      </time>
+                    </span>
+                    <strong
+                      className={`account-point-amount account-point-amount--${entry.kind}`}
+                    >
+                      {pointAmount(entry)}
+                    </strong>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </>
+        )}
+      </section>
 
       <div className="account-grid">
         <section className="account-card" aria-labelledby="account-preferences-heading">
@@ -749,7 +872,8 @@ export function Account({
                 </strong>
                 <p id="delete-confirmation-description">
                   This will delete your saved job preferences, extracted resume text,
-                  and AI candidate profile from Firestore. This cannot be undone.
+                  AI candidate profile, point balance, and point history from Firestore.
+                  This cannot be undone.
                 </p>
               </div>
               <div className="delete-confirmation-actions">
