@@ -24,6 +24,8 @@ const SAVED_PREFERENCES = {
 
 const SESSION_PROFILE: ResumeProfile = {
   summary: "Frontend engineer with experience building accessible web products.",
+  resumeImprovement:
+    "The resume is coherent; quantify one accessibility outcome. Build an accessible React component audit tool to reinforce the target frontend roles.",
   experienceLevel: "mid",
   skills: ["TypeScript", "React"],
   recentJobTitles: ["Frontend Engineer"],

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { PreferenceIdentity } from "@/components/job-preferences";
+import { ResumeImprovement } from "@/components/resume-improvement";
 import { trackResumeMatchJob } from "@/lib/applications/client";
 import type { ResumeProfile } from "@/lib/analysis/types";
 import {
@@ -308,14 +309,15 @@ export function JobSearch({
             : `${state.jobs.length} relevant ${state.jobs.length === 1 ? "job" : "jobs"} found`;
 
   return (
-    <section
-      className={`job-search-card job-search-card--${state.status}`}
-      aria-labelledby="job-search-heading"
-      aria-busy={state.status === "loading"}
-    >
+    <>
+      <section
+        className={`job-search-card job-search-card--${state.status}`}
+        aria-labelledby="job-search-heading"
+        aria-busy={state.status === "loading"}
+      >
       <div className="card-heading job-search-heading">
         <div>
-          <p className="step-label">Step 4 of 4</p>
+          <p className="step-label">Step 4 of 5</p>
           <h2
             id="job-search-heading"
             ref={headingRef}
@@ -437,6 +439,10 @@ export function JobSearch({
           </p>
         </>
       )}
-    </section>
+      </section>
+      {state.status === "success" && (
+        <ResumeImprovement recommendation={profile.resumeImprovement} />
+      )}
+    </>
   );
 }

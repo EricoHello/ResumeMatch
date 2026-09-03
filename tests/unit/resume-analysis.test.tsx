@@ -7,6 +7,8 @@ import { ResumeAnalysis } from "@/components/resume-analysis";
 
 const PROFILE = {
   summary: "Senior platform engineer focused on reliable distributed systems.",
+  resumeImprovement:
+    "The resume is coherent; tighten repeated systems wording. Build a TypeScript reliability dashboard to reinforce the target platform roles.",
   skills: ["TypeScript", "Distributed systems"],
   experienceLevel: "senior" as const,
   recentJobTitles: ["Senior Software Engineer"],
@@ -45,7 +47,7 @@ describe("ResumeAnalysis", () => {
     expect(
       screen.getByRole("heading", { name: "Analyzing your resume" }),
     ).toBeTruthy();
-    expect(screen.getByText("Step 3 of 4")).toBeTruthy();
+    expect(screen.getByText("Step 3 of 5")).toBeTruthy();
     expect(screen.getByRole("status").textContent).toContain(
       "Gemini is analyzing your resume…",
     );

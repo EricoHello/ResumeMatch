@@ -72,7 +72,7 @@ describe("FirestoreSavedResumeRepository", () => {
     expect(double.userDocument.collection).toHaveBeenCalledWith("resumeProfiles");
     expect(double.resumeProfiles.doc).toHaveBeenCalledWith("current");
     expect(double.transaction.set).toHaveBeenCalledWith(double.document, {
-      schemaVersion: 1,
+      schemaVersion: 2,
       resumeText: SAVED_RESUME.resumeText,
       profile: null,
       createdAt: now,
@@ -126,7 +126,7 @@ describe("FirestoreSavedResumeRepository", () => {
       exists: true,
       data: () => ({
         ...SAVED_RESUME,
-        schemaVersion: 1,
+        schemaVersion: 2,
         createdAt: Timestamp.fromMillis(1_000),
         updatedAt: Timestamp.fromMillis(2_000),
       }),
@@ -136,6 +136,34 @@ describe("FirestoreSavedResumeRepository", () => {
     );
 
     await expect(repository.get(USER_ID)).resolves.toEqual(SAVED_RESUME);
+  });
+
+  it("keeps legacy extracted text but discards a profile without an improvement", async () => {
+    const double = firestoreDouble({ exists: false });
+    double.document.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        schemaVersion: 1,
+        resumeText: SAVED_RESUME.resumeText,
+        profile: {
+          summary: "Legacy profile",
+          experienceLevel: "senior",
+          skills: ["TypeScript"],
+          recentJobTitles: ["Senior Software Engineer"],
+          targetRoles: ["Staff Software Engineer"],
+          searchKeywords: ["platform engineering"],
+          preferences: {},
+        },
+      }),
+    });
+    const repository = new FirestoreSavedResumeRepository(
+      () => double.firestore as never,
+    );
+
+    await expect(repository.get(USER_ID)).resolves.toEqual({
+      resumeText: SAVED_RESUME.resumeText,
+      profile: null,
+    });
   });
 
   it("checks for and deletes only the current saved resume document", async () => {

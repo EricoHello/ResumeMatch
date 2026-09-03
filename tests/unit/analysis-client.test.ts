@@ -17,12 +17,49 @@ const INPUT = {
     minimumSalary: 140_000,
   },
 };
+const PROFILE = {
+  summary: "Senior software engineer focused on distributed systems.",
+  resumeImprovement:
+    "The resume is coherent; tighten repeated systems wording. Build a TypeScript reliability dashboard to reinforce the target platform roles.",
+  experienceLevel: "senior",
+  skills: ["TypeScript", "Distributed systems"],
+  recentJobTitles: ["Senior Software Engineer"],
+  targetRoles: ["Staff Software Engineer"],
+  searchKeywords: ["TypeScript distributed systems"],
+  preferences: INPUT.preferences,
+};
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("analyzeResume", () => {
+  it("returns the resume improvement from the existing analysis response", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({ profile: PROFILE }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      analyzeResume(INPUT, new AbortController().signal),
+    ).resolves.toEqual(PROFILE);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an analysis response without a resume improvement", async () => {
+    const incompleteProfile = Object.fromEntries(
+      Object.entries(PROFILE).filter(([key]) => key !== "resumeImprovement"),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(Response.json({ profile: incompleteProfile })),
+    );
+
+    await expect(
+      analyzeResume(INPUT, new AbortController().signal),
+    ).rejects.toBeInstanceOf(ResumeAnalysisClientError);
+  });
+
   it("preserves a safe 429 retry interval for the UI", async () => {
     vi.stubGlobal(
       "fetch",

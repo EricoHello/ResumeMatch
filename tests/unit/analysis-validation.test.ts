@@ -4,6 +4,7 @@ import {
   AnalysisValidationError,
   MAX_ANALYSIS_SKILLS,
   MAX_ANALYSIS_SUMMARY_LENGTH,
+  MAX_RESUME_IMPROVEMENT_LENGTH,
   MAX_RESUME_TEXT_LENGTH,
   parseAnalyzeResumeRequest,
   parseGeneratedResumeAnalysis,
@@ -20,6 +21,8 @@ const PREFERENCES = {
 };
 const GENERATED_ANALYSIS = {
   summary: "Senior software engineer focused on distributed systems.",
+  resumeImprovement:
+    "The resume is coherent; tighten repeated systems wording. Build a TypeScript reliability dashboard to reinforce the target platform roles.",
   experienceLevel: "senior",
   skills: ["TypeScript", "Distributed systems"],
   recentJobTitles: ["Senior Software Engineer"],
@@ -76,6 +79,7 @@ describe("parseGeneratedResumeAnalysis", () => {
       parseGeneratedResumeAnalysis({
         ...GENERATED_ANALYSIS,
         summary: `  ${GENERATED_ANALYSIS.summary}  `,
+        resumeImprovement: `  ${GENERATED_ANALYSIS.resumeImprovement.replace(". Build", ".\nBuild")}  `,
         skills: ["TypeScript", " typescript ", "Distributed systems"],
       }),
     ).toEqual(GENERATED_ANALYSIS);
@@ -88,6 +92,11 @@ describe("parseGeneratedResumeAnalysis", () => {
     {
       ...GENERATED_ANALYSIS,
       summary: "x".repeat(MAX_ANALYSIS_SUMMARY_LENGTH + 1),
+    },
+    { ...GENERATED_ANALYSIS, resumeImprovement: "" },
+    {
+      ...GENERATED_ANALYSIS,
+      resumeImprovement: "x".repeat(MAX_RESUME_IMPROVEMENT_LENGTH + 1),
     },
     {
       ...GENERATED_ANALYSIS,

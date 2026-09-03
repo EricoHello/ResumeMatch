@@ -29,6 +29,8 @@ const INPUT = {
 };
 const GENERATED = {
   summary: "Senior software engineer focused on distributed systems.",
+  resumeImprovement:
+    "The resume is coherent; tighten repeated systems wording. Build a TypeScript reliability dashboard to reinforce the target platform roles.",
   experienceLevel: "senior",
   skills: ["TypeScript", "Distributed systems"],
   recentJobTitles: ["Senior Software Engineer"],
@@ -95,6 +97,21 @@ describe("GeminiResumeAnalyzer", () => {
     );
     expect(String(parameters.config?.systemInstruction)).toMatch(
       /personal\s+identifiers/,
+    );
+    expect(String(parameters.config?.systemInstruction)).toMatch(
+      /one short paragraph/,
+    );
+    expect(String(parameters.config?.systemInstruction)).toMatch(
+      /side-project idea/,
+    );
+    expect(String(parameters.config?.systemInstruction)).toMatch(
+      /job preferences for this recommendation/,
+    );
+    expect(String(parameters.config?.systemInstruction)).toMatch(
+      /Applications\s+history[\s\S]*job-search history[\s\S]*Gmail[\s\S]*behavioral data/,
+    );
+    expect(RESUME_ANALYSIS_RESPONSE_SCHEMA.required).toContain(
+      "resumeImprovement",
     );
   });
 

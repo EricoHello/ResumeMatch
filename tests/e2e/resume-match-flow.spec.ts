@@ -10,6 +10,8 @@ import {
 const PROFILE_DETAILS = {
   summary:
     "Senior software engineer with experience building reliable distributed systems.",
+  resumeImprovement:
+    "The resume is coherent; tighten any repeated systems language so the strongest outcomes stand out. Build a small TypeScript service-reliability dashboard with documented latency and uptime tradeoffs to reinforce the target platform roles.",
   skills: ["TypeScript", "Distributed systems", "API design"],
   experienceLevel: "senior",
   recentJobTitles: ["Senior Software Engineer"],
@@ -241,7 +243,9 @@ test("shows guest Account details and returns to the active matching session", a
   await mockSuccessfulAnalysis(page);
 
   await enterGuestMode(page);
+  await expect(page.getByText("Step 1 of 5", { exact: true })).toBeVisible();
   await uploadPdfResume(page);
+  await expect(page.getByText("Step 2 of 5", { exact: true })).toBeVisible();
   await page.getByLabel("Target city or location").fill("Remote");
   await page.getByLabel("Minimum acceptable salary").fill("95000");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
@@ -316,7 +320,7 @@ test("completes analysis and one live search for three guest job matches", async
   await page.getByRole("button", { name: "Continue", exact: true }).click();
 
   try {
-    await expect(page.getByText("Step 3 of 4", { exact: true })).toBeVisible();
+    await expect(page.getByText("Step 3 of 5", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Analyzing your resume" }),
     ).toBeVisible();
@@ -373,7 +377,10 @@ test("completes analysis and one live search for three guest job matches", async
   expect(preferenceRequests).toHaveLength(0);
   expect(jobSearchRequests).toHaveLength(0);
 
-  await expect(page.getByText("Step 4 of 4", { exact: true })).toBeVisible();
+  await expect(page.getByText("Step 4 of 5", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Resume Improvement" }),
+  ).toHaveCount(0);
   const findJobs = page.getByRole("button", { name: "Find 3 job matches" });
   await expect(findJobs).toBeVisible();
   await findJobs.click();
@@ -404,6 +411,12 @@ test("completes analysis and one live search for three guest job matches", async
   await expect(page.getByText("Northstar Systems")).toBeVisible();
   await expect(page.getByText("Salary not listed")).toBeVisible();
   await expect(page.getByRole("link", { name: /view & apply/i })).toHaveCount(3);
+  await expect(page.getByText("Step 5 of 5", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Resume Improvement" }),
+  ).toBeVisible();
+  await expect(page.getByText(PROFILE_DETAILS.resumeImprovement)).toBeVisible();
+  await expect(page.getByText(/using only your uploaded resume/i)).toBeVisible();
 
   expect(jobSearchRequests).toHaveLength(1);
   expect(jobSearch.requests).toHaveLength(1);

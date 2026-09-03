@@ -323,7 +323,7 @@ export function ResumeUploader({
     <section className="uploader-card" aria-labelledby="uploader-heading">
       <div className="card-heading">
         <div>
-          <p className="step-label">Step 1 of 4</p>
+          <p className="step-label">Step 1 of 5</p>
           <h2 id="uploader-heading" tabIndex={-1}>
             {showingSavedResult ? "Your saved resume" : "Upload your resume"}
           </h2>

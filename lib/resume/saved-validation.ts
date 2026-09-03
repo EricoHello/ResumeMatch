@@ -13,6 +13,7 @@ const PROFILE_KEYS = [
   "experienceLevel",
   "preferences",
   "recentJobTitles",
+  "resumeImprovement",
   "searchKeywords",
   "skills",
   "summary",
@@ -49,6 +50,7 @@ function parseProfile(value: unknown): ResumeProfile {
     return {
       ...parseGeneratedResumeAnalysis({
         summary: value.summary,
+        resumeImprovement: value.resumeImprovement,
         experienceLevel: value.experienceLevel,
         skills: value.skills,
         recentJobTitles: value.recentJobTitles,

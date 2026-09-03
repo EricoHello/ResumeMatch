@@ -5,6 +5,8 @@ import { JobSearchClientError, searchJobs } from "@/lib/jobs/client";
 
 const PROFILE = {
   summary: "Senior platform engineer.",
+  resumeImprovement:
+    "The resume is coherent; make one platform outcome more specific. Build a TypeScript reliability dashboard to reinforce the target roles.",
   experienceLevel: "senior" as const,
   skills: ["TypeScript"],
   recentJobTitles: ["Senior Software Engineer"],
@@ -96,4 +98,3 @@ describe("searchJobs client", () => {
     ).rejects.toBeInstanceOf(JobSearchClientError);
   });
 });
-

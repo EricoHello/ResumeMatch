@@ -16,6 +16,8 @@ const PREFERENCES = {
 
 const PROFILE = {
   summary: "Senior platform engineer.",
+  resumeImprovement:
+    "The resume is coherent; make one platform outcome more specific. Build a TypeScript reliability dashboard to reinforce the target roles.",
   experienceLevel: "senior",
   skills: ["TypeScript", "Kubernetes"],
   recentJobTitles: ["Senior Software Engineer"],
@@ -52,6 +54,10 @@ describe("parseSavedResume", () => {
     { resumeText: "Readable extracted resume text.", profile: null, uid: "bad" },
     { resumeText: "too short", profile: null },
     { resumeText: "Readable extracted resume text.", profile: {} },
+    {
+      resumeText: "Readable extracted resume text.",
+      profile: { ...PROFILE, resumeImprovement: undefined },
+    },
     {
       resumeText: "Readable extracted resume text.",
       profile: { ...PROFILE, privateField: "bad" },

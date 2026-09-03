@@ -28,6 +28,7 @@ export type AnalyzeResumeRequest = {
 
 export type GeneratedResumeAnalysis = {
   summary: string;
+  resumeImprovement: string;
   experienceLevel: ExperienceLevel;
   skills: string[];
   recentJobTitles: string[];

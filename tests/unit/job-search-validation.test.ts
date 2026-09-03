@@ -4,6 +4,8 @@ import { parseSearchJobsRequest } from "@/lib/jobs/validation";
 
 const PROFILE = {
   summary: "Senior platform engineer.",
+  resumeImprovement:
+    "The resume is coherent; make one platform outcome more specific. Build a TypeScript reliability dashboard to reinforce the target roles.",
   experienceLevel: "senior",
   skills: ["TypeScript", "Distributed systems"],
   recentJobTitles: ["Senior Software Engineer"],
@@ -36,6 +38,7 @@ describe("parseSearchJobsRequest", () => {
     null,
     {},
     { profile: PROFILE, resumeText: "must not be sent" },
+    { profile: { ...PROFILE, resumeImprovement: undefined } },
     { profile: { ...PROFILE, targetRoles: [] } },
     { profile: { ...PROFILE, preferences: { targetLocation: "Seattle" } } },
     { profile: { ...PROFILE, uid: "untrusted" } },

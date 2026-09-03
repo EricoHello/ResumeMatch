@@ -399,7 +399,7 @@ export function JobPreferences({
     <section className="preferences-card" aria-labelledby="preferences-heading">
       <div className="card-heading">
         <div>
-          <p className="step-label">Step 2 of 4</p>
+          <p className="step-label">Step 2 of 5</p>
           <h2 id="preferences-heading" ref={headingRef} tabIndex={-1}>
             Job preferences
           </h2>

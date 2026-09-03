@@ -9,6 +9,7 @@ const PROFILE_KEYS = [
   "experienceLevel",
   "preferences",
   "recentJobTitles",
+  "resumeImprovement",
   "searchKeywords",
   "skills",
   "summary",
@@ -46,6 +47,7 @@ export function parseSearchJobsRequest(value: unknown): SearchJobsRequest {
   try {
     const generated = parseGeneratedResumeAnalysis({
       summary: value.profile.summary,
+      resumeImprovement: value.profile.resumeImprovement,
       experienceLevel: value.profile.experienceLevel,
       skills: value.profile.skills,
       recentJobTitles: value.profile.recentJobTitles,

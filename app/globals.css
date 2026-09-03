@@ -364,7 +364,8 @@ button {
 .auth-card,
 .preferences-card,
 .analysis-card,
-.job-search-card {
+.job-search-card,
+.resume-improvement-card {
   border: 1px solid var(--card-border);
   border-radius: 22px;
   background: var(--surface);
@@ -381,7 +382,8 @@ button {
 .auth-card h2,
 .preferences-card h2,
 .analysis-card h2,
-.job-search-card h2 {
+.job-search-card h2,
+.resume-improvement-card h2 {
   margin: 0;
   font-size: 21px;
   letter-spacing: -0.025em;
@@ -3057,6 +3059,56 @@ input:disabled {
   text-underline-offset: 2px;
 }
 
+.resume-improvement-card {
+  scroll-margin-top: 24px;
+}
+
+.resume-improvement-heading {
+  margin-bottom: 18px;
+}
+
+.resume-improvement-recommendation {
+  padding: 19px;
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  border: 1px solid #d8def5;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--brand-soft), #fafbfe);
+}
+
+.resume-improvement-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  color: white;
+  background: var(--brand);
+  box-shadow: 0 7px 16px rgba(49, 87, 213, 0.17);
+  font-size: 15px;
+}
+
+.resume-improvement-recommendation .success-label {
+  margin: 0 0 7px;
+  color: var(--brand);
+}
+
+.resume-improvement-recommendation div > p:last-child {
+  margin: 0;
+  color: #364056;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.resume-improvement-source {
+  margin: 13px 2px 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
 .analysis-privacy {
   margin: 15px 2px 0;
   color: var(--muted);
@@ -3144,7 +3196,8 @@ input:disabled {
 :root[data-theme="dark"] .text-output,
 :root[data-theme="dark"] .profile-preview,
 :root[data-theme="dark"] .job-card,
-:root[data-theme="dark"] .job-search-empty {
+:root[data-theme="dark"] .job-search-empty,
+:root[data-theme="dark"] .resume-improvement-recommendation {
   border-color: #303b50;
   color: var(--ink);
   background: #111824;
@@ -3253,6 +3306,10 @@ input:disabled {
   color: #aebdff;
 }
 
+:root[data-theme="dark"] .resume-improvement-recommendation div > p:last-child {
+  color: #d7deeb;
+}
+
 :root[data-theme="dark"] .retry-countdown,
 :root[data-theme="dark"] .job-search-error-actions p {
   color: #ffadb4;
@@ -3352,7 +3409,8 @@ input:disabled {
   .auth-card,
   .preferences-card,
   .analysis-card,
-  .job-search-card {
+  .job-search-card,
+  .resume-improvement-card {
     border-radius: 18px;
     padding: 19px;
   }

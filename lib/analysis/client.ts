@@ -56,6 +56,7 @@ function parseResumeProfile(value: unknown): ResumeProfile | null {
 
   if (!(
     typeof profile.summary === "string" &&
+    typeof profile.resumeImprovement === "string" &&
     typeof profile.experienceLevel === "string" &&
     EXPERIENCE_LEVEL_SET.has(profile.experienceLevel) &&
     isStringArray(profile.skills) &&
@@ -69,6 +70,7 @@ function parseResumeProfile(value: unknown): ResumeProfile | null {
   try {
     return {
       summary: profile.summary,
+      resumeImprovement: profile.resumeImprovement,
       experienceLevel: profile.experienceLevel as ResumeProfile["experienceLevel"],
       skills: profile.skills,
       recentJobTitles: profile.recentJobTitles,

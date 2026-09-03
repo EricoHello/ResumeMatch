@@ -10,6 +10,7 @@ import {
 export const MIN_RESUME_TEXT_LENGTH = 20;
 export const MAX_RESUME_TEXT_LENGTH = 50_000;
 export const MAX_ANALYSIS_SUMMARY_LENGTH = 600;
+export const MAX_RESUME_IMPROVEMENT_LENGTH = 700;
 export const MAX_ANALYSIS_SKILLS = 24;
 export const MAX_RECENT_JOB_TITLES = 5;
 export const MAX_TARGET_ROLES = 6;
@@ -19,6 +20,7 @@ const REQUEST_KEYS = ["preferences", "resumeText"];
 const GENERATED_ANALYSIS_KEYS = [
   "experienceLevel",
   "recentJobTitles",
+  "resumeImprovement",
   "searchKeywords",
   "skills",
   "summary",
@@ -159,6 +161,11 @@ export function parseGeneratedResumeAnalysis(
       "Generated summary",
       MAX_ANALYSIS_SUMMARY_LENGTH,
     ),
+    resumeImprovement: parseString(
+      value.resumeImprovement,
+      "Generated resume improvement",
+      MAX_RESUME_IMPROVEMENT_LENGTH,
+    ).replace(/\s+/g, " "),
     experienceLevel:
       value.experienceLevel as GeneratedResumeAnalysis["experienceLevel"],
     skills: parseStringList(

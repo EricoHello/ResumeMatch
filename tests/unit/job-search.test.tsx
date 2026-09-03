@@ -39,6 +39,8 @@ import { JobSearch } from "@/components/job-search";
 
 const PROFILE = {
   summary: "Senior platform engineer.",
+  resumeImprovement:
+    "The resume is coherent; tighten repeated systems wording. Build a TypeScript reliability dashboard to reinforce the target platform roles.",
   experienceLevel: "senior" as const,
   skills: ["TypeScript"],
   recentJobTitles: ["Senior Software Engineer"],
@@ -162,7 +164,10 @@ describe("JobSearch", () => {
     );
     render(<JobSearch profile={PROFILE} identity={GUEST_IDENTITY} />);
 
-    expect(screen.getByText("Step 4 of 4")).toBeTruthy();
+    expect(screen.getByText("Step 4 of 5")).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { name: "Resume Improvement" }),
+    ).toBeNull();
     expect(clientMocks.searchJobs).not.toHaveBeenCalled();
     const start = screen.getByRole("button", { name: "Find 3 job matches" });
     fireEvent.click(start);
@@ -183,6 +188,12 @@ describe("JobSearch", () => {
     expect(screen.getByRole("list", { name: "Relevant job matches" }).children).toHaveLength(3);
     expect(screen.getByText("Salary not listed")).toBeTruthy();
     expect(screen.getAllByRole("link", { name: /view & apply/i })).toHaveLength(3);
+    expect(screen.getByText("Step 5 of 5")).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Resume Improvement" }),
+    ).toBeTruthy();
+    expect(screen.getByText(PROFILE.resumeImprovement)).toBeTruthy();
+    expect(screen.getByText(/using only your uploaded resume/i)).toBeTruthy();
   });
 
   it("awards the matching displayed job and reports earned points", async () => {
@@ -260,5 +271,8 @@ describe("JobSearch", () => {
       await screen.findByRole("heading", { name: "No relevant jobs found" }),
     ).toBeTruthy();
     expect(screen.queryByText(/no strong matches/i)).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Resume Improvement" }),
+    ).toBeTruthy();
   });
 });

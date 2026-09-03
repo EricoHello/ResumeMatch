@@ -46,6 +46,8 @@ const PREFERENCES = {
 };
 const PROFILE = {
   summary: "Software engineer building accessible products.",
+  resumeImprovement:
+    "The resume is coherent; quantify one accessibility outcome. Build an accessible TypeScript component audit tool to reinforce the target role.",
   experienceLevel: "mid" as const,
   skills: ["TypeScript"],
   recentJobTitles: ["Software Engineer"],

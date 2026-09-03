@@ -14,7 +14,7 @@ import { parseSavedResume } from "./saved-validation";
 const SAVED_RESUME_DOCUMENT = "current";
 
 type StoredSavedResume = SavedResume & {
-  schemaVersion: 1;
+  schemaVersion: 2;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };
@@ -34,13 +34,16 @@ export class FirestoreSavedResumeRepository {
     if (!snapshot.exists) return null;
 
     const data = snapshot.data();
-    if (data?.schemaVersion !== 1) {
+    if (data?.schemaVersion !== 1 && data?.schemaVersion !== 2) {
       throw new Error("Unsupported saved resume schema.");
     }
 
     return parseSavedResume({
       resumeText: data.resumeText,
-      profile: data.profile,
+      // Version 1 profiles predate resume-improvement recommendations. Keep
+      // their extracted text and require a fresh analysis instead of inventing
+      // or displaying a stale recommendation.
+      profile: data.schemaVersion === 1 ? null : data.profile,
     });
   }
 
@@ -71,7 +74,7 @@ export class FirestoreSavedResumeRepository {
           ? existingCreatedAt
           : timestamp;
       const storedResume: StoredSavedResume = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         resumeText: normalized.resumeText,
         profile: normalized.profile,
         createdAt,

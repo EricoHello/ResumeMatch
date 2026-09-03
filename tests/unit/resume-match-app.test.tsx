@@ -164,6 +164,8 @@ const SIGNED_IN_USER = {
 
 const PROFILE = {
   summary: "Senior platform engineer.",
+  resumeImprovement:
+    "The resume is coherent; make one platform outcome more specific. Build a TypeScript reliability dashboard to reinforce the target roles.",
   experienceLevel: "senior" as const,
   skills: ["TypeScript"],
   recentJobTitles: ["Senior Software Engineer"],

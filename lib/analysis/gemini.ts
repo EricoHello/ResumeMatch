@@ -14,6 +14,7 @@ import type {
 } from "./types";
 import {
   MAX_ANALYSIS_SKILLS,
+  MAX_RESUME_IMPROVEMENT_LENGTH,
   MAX_RECENT_JOB_TITLES,
   MAX_SEARCH_KEYWORDS,
   MAX_TARGET_ROLES,
@@ -33,13 +34,25 @@ details, street addresses, demographic or protected traits, and all other person
 identifiers from every field; extract only professional and job-search information.
 Use the supplied job preferences only to make target roles and search keywords more
 relevant. Do not search for jobs, browse, call tools, recommend employers, or return
-prose outside the required JSON schema.`;
+prose outside the required JSON schema.
+
+For resumeImprovement, write one short paragraph based only on the resume and the
+professional direction you infer from it. Mention only glaring spelling, wording,
+career-alignment, or emphasis issues that materially weaken the candidate's strongest
+professional story. Do not treat different experience as a problem by itself. Do not
+rewrite or score the resume, produce a list, invent a deficiency, or use the supplied
+job preferences for this recommendation. Do not use or claim access to Applications
+history, job-search history, Gmail or other email, or any behavioral data. Always
+include one practical side-project idea that strengthens the resume for the inferred
+target roles. If the resume is already coherent, say so briefly, give only the most
+useful minor improvement, and include the side-project idea.`;
 
 export const RESUME_ANALYSIS_RESPONSE_SCHEMA = {
   type: "object",
   additionalProperties: false,
   propertyOrdering: [
     "summary",
+    "resumeImprovement",
     "experienceLevel",
     "skills",
     "recentJobTitles",
@@ -51,6 +64,12 @@ export const RESUME_ANALYSIS_RESPONSE_SCHEMA = {
       type: "string",
       description:
         "A concise factual professional summary grounded only in the resume, no more than 600 characters.",
+    },
+    resumeImprovement: {
+      type: "string",
+      maxLength: MAX_RESUME_IMPROVEMENT_LENGTH,
+      description:
+        "One short paragraph, no more than 700 characters, identifying only obvious resume issues or the most useful minor improvement and ending with one practical side-project idea aligned to the candidate's inferred target roles. No lists, scores, rewrites, invented deficiencies, job preferences, or behavioral data.",
     },
     experienceLevel: {
       type: "string",
@@ -89,6 +108,7 @@ export const RESUME_ANALYSIS_RESPONSE_SCHEMA = {
   },
   required: [
     "summary",
+    "resumeImprovement",
     "experienceLevel",
     "skills",
     "recentJobTitles",

@@ -55,6 +55,8 @@ const INPUT = {
 };
 const PROFILE = {
   summary: "Senior software engineer focused on distributed systems.",
+  resumeImprovement:
+    "The resume is coherent; tighten repeated wording around systems work. Build a TypeScript reliability dashboard to reinforce the target platform roles.",
   experienceLevel: "senior",
   skills: ["TypeScript", "Distributed systems"],
   recentJobTitles: ["Senior Software Engineer"],
