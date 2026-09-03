@@ -50,6 +50,7 @@ type ApplicationsState =
 
 type ArchiveFilter = "active" | "archived" | "all";
 type DateFilterField = "dateAdded" | "appliedDate";
+type ApplicationsView = "list" | "graph";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -79,6 +80,105 @@ function requiredFormValue(form: FormData, name: string) {
 
 function statusFromForm(form: FormData) {
   return requiredFormValue(form, "status") as ApplicationStatus;
+}
+
+function ApplicationsGraph({
+  applications,
+  includeArchived,
+  onIncludeArchivedChange,
+  onStatusSelect,
+}: {
+  applications: TrackedApplication[];
+  includeArchived: boolean;
+  onIncludeArchivedChange: (includeArchived: boolean) => void;
+  onStatusSelect: (status: ApplicationStatus) => void;
+}) {
+  const includedApplications = useMemo(
+    () =>
+      applications.filter(
+        (application) => includeArchived || !application.archived,
+      ),
+    [applications, includeArchived],
+  );
+  const statusCounts = useMemo(
+    () =>
+      APPLICATION_STATUSES.map((status) => ({
+        status,
+        count: includedApplications.filter(
+          (application) => application.status === status,
+        ).length,
+      })),
+    [includedApplications],
+  );
+  const largestCount = Math.max(1, ...statusCounts.map(({ count }) => count));
+  const total = includedApplications.length;
+
+  return (
+    <section
+      className="account-card application-graph-card"
+      aria-labelledby="application-progress-heading"
+    >
+      <div className="application-graph-heading">
+        <div>
+          <p className="step-label">Status overview</p>
+          <h2 id="application-progress-heading">Application progress</h2>
+          <p>
+            See how your applications are distributed across each stage of the
+            process.
+          </p>
+        </div>
+        <label className="application-graph-archive-toggle">
+          <input
+            type="checkbox"
+            checked={includeArchived}
+            onChange={(event) =>
+              onIncludeArchivedChange(event.target.checked)
+            }
+          />
+          <span>Include archived applications</span>
+        </label>
+      </div>
+
+      <div className="application-graph-total" aria-live="polite">
+        <strong>{total}</strong>
+        <span>
+          {includeArchived ? "active and archived" : "active"}{" "}
+          {total === 1 ? "application" : "applications"}
+        </span>
+      </div>
+
+      <div
+        className="application-status-chart"
+        aria-label="Applications by status"
+      >
+        {statusCounts.map(({ status, count }) => (
+          <button
+            className={`application-status-bar application-status-bar--${status.toLowerCase()}`}
+            type="button"
+            key={status}
+            disabled={count === 0}
+            aria-label={`${status}: ${count} ${count === 1 ? "application" : "applications"}${
+              count > 0 ? ". Show in list" : ""
+            }`}
+            onClick={() => onStatusSelect(status)}
+          >
+            <span className="application-status-bar-label">{status}</span>
+            <span className="application-status-bar-track" aria-hidden="true">
+              <span
+                className="application-status-bar-fill"
+                style={{ width: `${(count / largestCount) * 100}%` }}
+              />
+            </span>
+            <strong>{count}</strong>
+          </button>
+        ))}
+      </div>
+
+      <p className="application-graph-hint">
+        Select a status to view those applications in the list.
+      </p>
+    </section>
+  );
 }
 
 function ApplicationEditor({
@@ -528,6 +628,8 @@ export function Applications({
   );
   const [addOpen, setAddOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [view, setView] = useState<ApplicationsView>("list");
+  const [includeArchivedInGraph, setIncludeArchivedInGraph] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"all" | ApplicationStatus>(
     "all",
   );
@@ -721,6 +823,29 @@ export function Applications({
     statusFilter,
   ]);
 
+  const graphApplicationCount =
+    state.status === "ready"
+      ? state.applications.filter(
+          (application) => includeArchivedInGraph || !application.archived,
+        ).length
+      : 0;
+  const toolbarCount =
+    state.status === "ready"
+      ? view === "graph"
+        ? graphApplicationCount
+        : filteredApplications.length
+      : "—";
+  const toolbarDescription =
+    state.status !== "ready"
+      ? "loading applications"
+      : view === "graph"
+        ? `${includeArchivedInGraph ? "active and archived" : "active"} ${
+            graphApplicationCount === 1 ? "application" : "applications"
+          } visualized`
+        : `of ${state.applications.length} tracked ${
+            state.applications.length === 1 ? "application" : "applications"
+          } shown`;
+
   const clearFilters = () => {
     setStatusFilter("all");
     setArchiveFilter("active");
@@ -728,6 +853,16 @@ export function Applications({
     setDateFilterField("dateAdded");
     setDateFrom("");
     setDateTo("");
+  };
+
+  const showStatusInList = (status: ApplicationStatus) => {
+    setStatusFilter(status);
+    setArchiveFilter(includeArchivedInGraph ? "all" : "active");
+    setSearchFilter("");
+    setDateFilterField("dateAdded");
+    setDateFrom("");
+    setDateTo("");
+    setView("list");
   };
 
   const handleAdded = (result: {
@@ -795,27 +930,43 @@ export function Applications({
       ) : (
         <>
           <div className="applications-toolbar">
-            <div>
-              <strong>
-                {state.status === "ready" ? filteredApplications.length : "—"}
-              </strong>
-              <span>
-                {state.status === "ready"
-                  ? `of ${state.applications.length} tracked ${state.applications.length === 1 ? "application" : "applications"} shown`
-                  : "loading applications"}
-              </span>
+            <div className="applications-toolbar-summary">
+              <strong>{toolbarCount}</strong>
+              <span>{toolbarDescription}</span>
             </div>
-            <button
-              className="primary-button"
-              type="button"
-              disabled={addOpen}
-              onClick={() => {
-                setAddOpen(true);
-                setNotice(null);
-              }}
-            >
-              Add Application
-            </button>
+            <div className="applications-toolbar-actions">
+              <div
+                className="application-view-switch"
+                role="group"
+                aria-label="Applications view"
+              >
+                <button
+                  type="button"
+                  aria-pressed={view === "list"}
+                  onClick={() => setView("list")}
+                >
+                  List
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={view === "graph"}
+                  onClick={() => setView("graph")}
+                >
+                  Graph
+                </button>
+              </div>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={addOpen}
+                onClick={() => {
+                  setAddOpen(true);
+                  setNotice(null);
+                }}
+              >
+                Add Application
+              </button>
+            </div>
           </div>
 
           {addOpen && (
@@ -828,8 +979,13 @@ export function Applications({
 
           {notice && <p className="applications-notice" role="status">{notice}</p>}
 
-          {state.status === "ready" && state.applications.length > 0 && (
-            <section className="account-card applications-filter-card" aria-labelledby="application-filters-heading">
+          {view === "list" &&
+            state.status === "ready" &&
+            state.applications.length > 0 && (
+            <section
+              className="account-card applications-filter-card"
+              aria-labelledby="application-filters-heading"
+            >
               <div className="application-section-heading">
                 <div>
                   <p className="step-label">Find applications</p>
@@ -916,7 +1072,16 @@ export function Applications({
             </section>
           )}
 
-          {state.status === "ready" && (
+          {view === "graph" && state.status === "ready" && (
+            <ApplicationsGraph
+              applications={state.applications}
+              includeArchived={includeArchivedInGraph}
+              onIncludeArchivedChange={setIncludeArchivedInGraph}
+              onStatusSelect={showStatusInList}
+            />
+          )}
+
+          {view === "list" && state.status === "ready" && (
             <form
               className="account-card application-settings-card"
               onSubmit={(event) => void saveAutoArchiveSetting(event)}
@@ -979,7 +1144,7 @@ export function Applications({
             </div>
           )}
 
-          {state.status === "ready" && state.applications.length === 0 && (
+          {view === "list" && state.status === "ready" && state.applications.length === 0 && (
             <section className="account-card applications-empty">
               <span aria-hidden="true">↗</span>
               <h2>No applications yet</h2>
@@ -990,7 +1155,7 @@ export function Applications({
             </section>
           )}
 
-          {state.status === "ready" &&
+          {view === "list" && state.status === "ready" &&
             state.applications.length > 0 &&
             filteredApplications.length === 0 && (
               <section className="account-card applications-empty applications-filter-empty">
@@ -1003,7 +1168,7 @@ export function Applications({
               </section>
             )}
 
-          {state.status === "ready" && filteredApplications.length > 0 && (
+          {view === "list" && state.status === "ready" && filteredApplications.length > 0 && (
             <ol className="applications-list" aria-label="Tracked applications">
               {filteredApplications.map((application) => (
                 <ApplicationEditor

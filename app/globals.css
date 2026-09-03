@@ -1184,7 +1184,7 @@ button {
   background: var(--strip-surface);
 }
 
-.applications-toolbar > div {
+.applications-toolbar-summary {
   display: flex;
   align-items: baseline;
   gap: 7px;
@@ -1200,6 +1200,41 @@ button {
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
+}
+
+.applications-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.application-view-switch {
+  padding: 3px;
+  display: inline-flex;
+  gap: 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--background);
+}
+
+.application-view-switch button {
+  min-height: 32px;
+  padding: 0 12px;
+  cursor: pointer;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 780;
+  transition: color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.application-view-switch button:hover,
+.application-view-switch button[aria-pressed="true"] {
+  color: var(--brand);
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgba(25, 38, 74, 0.08);
 }
 
 .applications-toolbar .primary-button,
@@ -1589,6 +1624,152 @@ button {
 
 .applications-filter-empty .secondary-button {
   margin-top: 15px;
+}
+
+.application-graph-card {
+  display: grid;
+  gap: 20px;
+}
+
+.application-graph-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.application-graph-heading > div {
+  max-width: 540px;
+}
+
+.application-graph-heading h2 {
+  margin: 0;
+}
+
+.application-graph-heading p:last-child {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.application-graph-archive-toggle {
+  min-height: 38px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: var(--background);
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.application-graph-archive-toggle input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--brand);
+}
+
+.application-graph-total {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.application-graph-total strong {
+  color: var(--brand);
+  font-size: 25px;
+  font-variant-numeric: tabular-nums;
+}
+
+.application-graph-total span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.application-status-chart {
+  display: grid;
+  gap: 8px;
+}
+
+.application-status-bar {
+  width: 100%;
+  min-height: 42px;
+  padding: 7px 9px;
+  display: grid;
+  grid-template-columns: minmax(82px, 112px) minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  border: 0;
+  border-radius: 10px;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+  transition: background 140ms ease;
+}
+
+.application-status-bar:hover:not(:disabled) {
+  background: var(--background);
+}
+
+.application-status-bar:disabled {
+  opacity: 0.72;
+}
+
+.application-status-bar-label {
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.application-status-bar-track {
+  height: 13px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--background);
+}
+
+.application-status-bar-fill {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand), #6683e6);
+  transition: width 220ms ease;
+}
+
+.application-status-bar--assessment .application-status-bar-fill,
+.application-status-bar--interview .application-status-bar-fill {
+  background: var(--warning);
+}
+
+.application-status-bar--offer .application-status-bar-fill {
+  background: var(--success);
+}
+
+.application-status-bar--rejected .application-status-bar-fill,
+.application-status-bar--withdrawn .application-status-bar-fill {
+  background: var(--danger);
+}
+
+.application-status-bar strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.application-graph-hint {
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
 }
 
 .application-settings-card {
@@ -2009,7 +2190,10 @@ button {
 .job-search-card h2:focus-visible,
 .job-apply-link:focus-visible,
 .application-job-link:focus-visible,
-.application-delete-button:focus-visible {
+.application-delete-button:focus-visible,
+.application-view-switch button:focus-visible,
+.application-status-bar:focus-visible,
+.application-graph-archive-toggle:focus-within {
   outline: 3px solid rgba(49, 87, 213, 0.24);
   outline-offset: 3px;
 }
@@ -3200,6 +3384,11 @@ input:disabled {
     flex-direction: column;
   }
 
+  .applications-toolbar-actions {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
   .applications-sign-in-card .google-button {
     width: 100%;
   }
@@ -3211,6 +3400,21 @@ input:disabled {
   .application-card-heading {
     flex-direction: column;
     gap: 10px;
+  }
+
+  .application-graph-heading {
+    flex-direction: column;
+  }
+
+  .application-graph-archive-toggle {
+    width: 100%;
+    white-space: normal;
+  }
+
+  .application-status-bar {
+    grid-template-columns: 76px minmax(0, 1fr) 24px;
+    gap: 8px;
+    padding-inline: 3px;
   }
 
   .application-badges {

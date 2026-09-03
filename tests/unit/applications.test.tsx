@@ -274,6 +274,72 @@ describe("Applications", () => {
     expect(screen.queryByText("Northstar")).toBeNull();
   });
 
+  it("shows status counts, excludes archived applications by default, and opens a status in the list", async () => {
+    const interviewApplication = {
+      ...APPLICATION,
+      id: "application-two",
+      title: "Product Engineer",
+      company: "Acme",
+      status: "Interview" as const,
+    };
+    const archivedApplication = {
+      ...APPLICATION,
+      id: "application-three",
+      title: "Backend Engineer",
+      company: "Oldco",
+      status: "Rejected" as const,
+      archived: true,
+      archivedAt: "2026-09-01T18:00:00.000Z",
+      archiveReason: "inactivity" as const,
+    };
+    clientMocks.load.mockResolvedValue([
+      APPLICATION,
+      interviewApplication,
+      archivedApplication,
+    ]);
+
+    render(
+      <Applications
+        identity={{ kind: "user", user: USER }}
+        firebaseAvailable
+        authBusy={false}
+        authMessage={null}
+        onBack={vi.fn()}
+        onGoogleSignIn={vi.fn()}
+      />,
+    );
+
+    await screen.findByText("Northstar");
+    fireEvent.click(screen.getByRole("button", { name: "Graph" }));
+
+    expect(screen.getByRole("heading", { name: "Application progress" })).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { name: "Automatic inactivity archiving" }),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: "Applying: 1 application. Show in list" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Interview: 1 application. Show in list" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Rejected: 0 applications" })).toHaveProperty("disabled", true);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include archived applications" }));
+    expect(screen.getByRole("button", { name: "Rejected: 1 application. Show in list" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Rejected: 1 application. Show in list" }));
+    expect(screen.getByText("Oldco")).toBeTruthy();
+    expect(screen.queryByText("Northstar")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Graph" }));
+    fireEvent.click(screen.getByRole("button", { name: "Interview: 1 application. Show in list" }));
+    expect(screen.getByRole("button", { name: "List" }).getAttribute("aria-pressed")).toBe("true");
+    expect(
+      (screen.getByLabelText("Status", {
+        selector: "#application-status-filter",
+      }) as HTMLSelectElement).value,
+    ).toBe("Interview");
+    expect(screen.getByText("Acme")).toBeTruthy();
+    expect(screen.queryByText("Northstar")).toBeNull();
+    expect(screen.queryByText("Oldco")).toBeNull();
+  });
+
   it("archives, restores, and permanently deletes with confirmation", async () => {
     render(
       <Applications
