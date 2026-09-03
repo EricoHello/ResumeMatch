@@ -6,6 +6,16 @@ const preferenceMocks = vi.hoisted(() => ({ get: vi.fn() }));
 const resumeMocks = vi.hoisted(() => ({ get: vi.fn() }));
 const privacyMocks = vi.hoisted(() => ({ get: vi.fn() }));
 const pointsMocks = vi.hoisted(() => ({ get: vi.fn() }));
+const applicationMocks = vi.hoisted(() => ({ list: vi.fn() }));
+const applicationSettingsMocks = vi.hoisted(() => ({ get: vi.fn() }));
+
+vi.mock("@/lib/applications/repository", () => ({
+  applicationsRepository: applicationMocks,
+}));
+
+vi.mock("@/lib/applications/settings-repository", () => ({
+  applicationSettingsRepository: applicationSettingsMocks,
+}));
 
 vi.mock("@/lib/preferences/repository", () => ({
   preferencesRepository: preferenceMocks,
@@ -56,6 +66,30 @@ const POINTS = {
     },
   ],
 };
+const APPLICATIONS = [
+  {
+    id: "application-1",
+    title: "Staff Software Engineer",
+    company: "Northstar",
+    location: "Seattle, WA",
+    salary: "$160,000 / year",
+    jobUrl: "https://jobs.example.test/one",
+    source: "JSearch",
+    sourceJobId: "one",
+    origin: "resumematch" as const,
+    status: "Applying" as const,
+    dateAdded: "2026-08-30T11:30:00.000Z",
+    appliedDate: null,
+    lastUpdated: "2026-08-30T11:30:00.000Z",
+    lastActivityAt: "2026-08-30T11:30:00.000Z",
+    notes: "",
+    nextAction: null,
+    nextActionDate: null,
+    archived: false,
+    archivedAt: null,
+    archiveReason: null,
+  },
+];
 
 describe("FirestoreAccountDataRepository", () => {
   beforeEach(() => {
@@ -63,8 +97,12 @@ describe("FirestoreAccountDataRepository", () => {
     resumeMocks.get.mockReset();
     privacyMocks.get.mockReset();
     pointsMocks.get.mockReset();
+    applicationMocks.list.mockReset();
+    applicationSettingsMocks.get.mockReset();
     privacyMocks.get.mockResolvedValue({ saveResumeData: true });
     pointsMocks.get.mockResolvedValue(POINTS);
+    applicationMocks.list.mockResolvedValue(APPLICATIONS);
+    applicationSettingsMocks.get.mockResolvedValue({ autoArchiveDays: 30 });
   });
 
   it("exports preferences, extracted text, and the AI profile", async () => {
@@ -79,7 +117,7 @@ describe("FirestoreAccountDataRepository", () => {
     );
 
     await expect(repository.export(USER_ID)).resolves.toEqual({
-      schemaVersion: 3,
+      schemaVersion: 5,
       generatedAt: "2026-08-30T12:00:00.000Z",
       data: {
         savedPreferences: PREFERENCES,
@@ -87,6 +125,8 @@ describe("FirestoreAccountDataRepository", () => {
         aiCandidateProfile: PROFILE,
         privacySettings: { saveResumeData: true },
         points: POINTS,
+        applications: APPLICATIONS,
+        applicationSettings: { autoArchiveDays: 30 },
       },
     });
     expect(preferenceMocks.get).toHaveBeenCalledWith(USER_ID);
@@ -94,6 +134,10 @@ describe("FirestoreAccountDataRepository", () => {
     expect(pointsMocks.get).toHaveBeenCalledWith(USER_ID, {
       historyLimit: null,
     });
+    expect(applicationMocks.list).toHaveBeenCalledWith(USER_ID, {
+      limit: null,
+    });
+    expect(applicationSettingsMocks.get).toHaveBeenCalledWith(USER_ID);
   });
 
   it("represents data that has not been saved with null values", async () => {
@@ -111,6 +155,8 @@ describe("FirestoreAccountDataRepository", () => {
         aiCandidateProfile: null,
         privacySettings: { saveResumeData: true },
         points: POINTS,
+        applications: APPLICATIONS,
+        applicationSettings: { autoArchiveDays: 30 },
       },
     });
   });

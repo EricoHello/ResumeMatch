@@ -17,6 +17,7 @@ import {
   Account,
   type ResumePrivacyViewState,
 } from "@/components/account";
+import { Applications } from "@/components/applications";
 import { JobSearch } from "@/components/job-search";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -60,7 +61,7 @@ type AuthState =
   | { status: "guest" }
   | { status: "user"; user: User };
 
-type AppView = "match" | "account";
+type AppView = "match" | "applications" | "account";
 type UserResumePrivacyState = {
   userId: string;
   view: ResumePrivacyViewState;
@@ -947,6 +948,14 @@ export function ResumeMatchApp() {
               <button
                 className="nav-account-button"
                 type="button"
+                aria-current={activeView === "applications" ? "page" : undefined}
+                onClick={() => setActiveView("applications")}
+              >
+                Applications
+              </button>
+              <button
+                className="nav-account-button"
+                type="button"
                 aria-current={activeView === "account" ? "page" : undefined}
                 onClick={() => setActiveView("account")}
               >
@@ -1136,6 +1145,18 @@ export function ResumeMatchApp() {
                 });
               }
             }}
+          />
+        )}
+
+        {identity && activeView === "applications" && (
+          <Applications
+            key={identityKey}
+            identity={identity}
+            firebaseAvailable={firebaseAvailable}
+            authBusy={authBusy}
+            authMessage={authMessage}
+            onBack={showMatchView}
+            onGoogleSignIn={() => void googleSignIn()}
           />
         )}
       </div>

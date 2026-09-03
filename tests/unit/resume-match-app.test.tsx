@@ -394,6 +394,13 @@ describe("ResumeMatchApp authentication recovery", () => {
 
     expect(savedResumeMocks.load).not.toHaveBeenCalled();
     expect(savedResumeMocks.save).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Applications" }));
+    expect(
+      await screen.findByRole("heading", {
+        name: "Sign in to track applications",
+      }),
+    ).toBeTruthy();
   });
 
   it("keeps signed-in resume changes session-only when saving is disabled", async () => {

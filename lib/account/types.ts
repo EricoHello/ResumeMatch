@@ -1,10 +1,14 @@
 import type { ResumeProfile } from "@/lib/analysis/types";
+import type {
+  ApplicationSettings,
+  TrackedApplication,
+} from "@/lib/applications/types";
 import type { PointAccountSnapshot } from "@/lib/points/types";
 import type { JobPreferences } from "@/lib/preferences/types";
 import type { ResumePrivacySettings } from "@/lib/privacy/types";
 
 export type ResumeMatchDataExport = {
-  schemaVersion: 3;
+  schemaVersion: 5;
   generatedAt: string;
   data: {
     savedPreferences: JobPreferences | null;
@@ -12,6 +16,8 @@ export type ResumeMatchDataExport = {
     aiCandidateProfile: ResumeProfile | null;
     privacySettings: ResumePrivacySettings;
     points: PointAccountSnapshot;
+    applications: TrackedApplication[];
+    applicationSettings: ApplicationSettings;
   };
 };
 

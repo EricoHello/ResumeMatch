@@ -9,13 +9,15 @@ import {
 } from "@/lib/account/email";
 
 const DATA_EXPORT = {
-  schemaVersion: 3 as const,
+  schemaVersion: 5 as const,
   generatedAt: "2026-08-30T12:00:00.000Z",
   data: {
     savedPreferences: null,
     extractedResumeText: "Private extracted resume text.",
     aiCandidateProfile: null,
     privacySettings: { saveResumeData: true },
+    applications: [],
+    applicationSettings: { autoArchiveDays: 30 as const },
     points: {
       points: { balance: 0, totalEarned: 0, totalSpent: 0 },
       history: [],

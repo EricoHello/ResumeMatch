@@ -12,6 +12,7 @@ PDF and DOCX files are parsed into raw text. Signed-in users can load and save j
 
 - Optional Google Sign-In with Firebase Authentication
 - In-app Account view with Firebase identity, saved data, email export, permanent deletion, and guest access
+- Signed-in application tracker with search and status/date/archive filters, manual entry, notes, next actions, permanent deletion, and restorable inactivity archiving
 - Persistent, default-on control over whether future resume text and AI profiles are saved
 - Persistent light and dark themes with system-preference detection
 - Session-only guest mode with no guest Firestore writes
@@ -26,11 +27,12 @@ PDF and DOCX files are parsed into raw text. Signed-in users can load and save j
 - Accessible processing, success, error, and retry states
 - Owner-scoped Firestore preference persistence for signed-in users
 - Owner-scoped extracted resume text and latest AI-profile persistence for signed-in users
+- Idempotent Apply-click tracking under each authenticated user's Firestore data
 - Strict API validation and Firebase ID-token verification
 - Firestore rules and emulator tests for owner isolation and schema enforcement
 - Railway configuration and health check
 
-Original uploaded files and job results are not persisted by ResumeMatch. For signed-in users, job preferences are stored in their owner-scoped Firestore subtree. Extracted resume text and the latest generated AI profile are also stored by default, but users can turn resume saving off from Account; future resume data then stays session-only. Guest data always remains session-only. Only a compact search query derived from the structured profile is sent to JSearch; resume text is not sent to the job provider. On Gemini's free tier, Google states that submitted content may be used to improve its products; review the [Gemini API pricing and data-use details](https://ai.google.dev/gemini-api/docs/pricing) before using real personal data.
+Original uploaded files and unselected job results are not persisted by ResumeMatch. For signed-in users, job preferences and application tracker entries are stored in their owner-scoped Firestore subtree. Clicking a result's Apply link records that job as `Applying`; it is not marked `Applied` until the user confirms that status. Extracted resume text and the latest generated AI profile are also stored by default, but users can turn resume saving off from Account; future resume data then stays session-only. Guest data always remains session-only. Only a compact search query derived from the structured profile is sent to JSearch; resume text is not sent to the job provider. On Gemini's free tier, Google states that submitted content may be used to improve its products; review the [Gemini API pricing and data-use details](https://ai.google.dev/gemini-api/docs/pricing) before using real personal data.
 
 ## Local setup
 
@@ -136,6 +138,8 @@ Authorization: Bearer <firebase-id-token>
 
 The backend verifies that token with Firebase Admin and derives the user ID from the decoded token. It never accepts a user ID from the request body or query string.
 
+`GET /api/applications` lists the authenticated user's tracker and applies the saved inactivity-archive policy. `POST /api/applications` creates a validated manual or ResumeMatch-sourced entry, using a deterministic URL-based document ID to prevent duplicates. `PATCH /api/applications` updates meaningful fields or archives/restores an entry without changing its status. `DELETE /api/applications` permanently deletes one confirmed tracker entry. `GET` and `PUT /api/applications/settings` manage the 14, 30, 60, 90 day, or Never automatic-archive policy. All operations derive the owner from the verified Firebase token.
+
 `POST /api/account/data` emails a JSON export to the verified email in the authenticated Firebase token. `DELETE /api/account/data` recursively deletes the authenticated user's complete `users/{uid}` Firestore subtree. Neither endpoint accepts a user ID or recipient address from the client.
 
 `GET /api/account/privacy` loads the signed-in user's persisted resume-storage setting, which defaults to enabled when no setting document exists. `PUT /api/account/privacy` accepts exactly one Boolean `saveResumeData` field. Resume writes read this setting inside the same Firestore transaction as the write, so disabling storage also prevents concurrent or direct API writes. `DELETE /api/resumes/saved` deletes only the saved resume text and AI profile, leaving preferences, the privacy setting, and account access intact.
@@ -183,7 +187,8 @@ After deployment, verify both formats and both access modes: Google Sign-In with
 
 ## Current boundaries
 
-- Job results remain session-only; saved searches and applications are not implemented.
+- Job results remain session-only unless a signed-in user opens the Apply link, which stores that position in Applications. Saved searches are not implemented.
+- Gmail-based application detection and notifications are intentionally deferred; the tracker currently changes only through ResumeMatch Apply clicks and user edits.
 - The POC returns the strongest available current matches but does not guarantee that every listing publishes salary data.
 - Scanned/image-only PDFs need OCR, which is not included.
 - Legacy `.doc` files are rejected; only DOCX is supported.

@@ -872,8 +872,8 @@ export function Account({
                 </strong>
                 <p id="delete-confirmation-description">
                   This will delete your saved job preferences, extracted resume text,
-                  AI candidate profile, point balance, and point history from Firestore.
-                  This cannot be undone.
+                  AI candidate profile, applications, point balance, and point history
+                  from Firestore. This cannot be undone.
                 </p>
               </div>
               <div className="delete-confirmation-actions">
@@ -922,8 +922,8 @@ export function Account({
           <p>
             {identity.kind === "user"
               ? resumeSavingEnabled
-                ? "Signing out ends your authenticated ResumeMatch session. Your saved resume, latest AI profile, and job preferences remain in your account."
-                : "Signing out ends this session. Job preferences and any resume data you chose to keep remain in your account."
+                ? "Signing out ends your authenticated ResumeMatch session. Your applications, saved resume, latest AI profile, and job preferences remain in your account."
+                : "Signing out ends this session. Applications, job preferences, and any resume data you chose to keep remain in your account."
               : "Sign in with Google to save job preferences across visits. Your current guest data stays session-only."}
           </p>
         </div>

@@ -2,6 +2,8 @@ import "server-only";
 
 import type { Firestore } from "firebase-admin/firestore";
 
+import { applicationsRepository } from "@/lib/applications/repository";
+import { applicationSettingsRepository } from "@/lib/applications/settings-repository";
 import { getFirebaseAdminFirestore } from "@/lib/firebase/admin";
 import { pointsRepository } from "@/lib/points/repository";
 import { preferencesRepository } from "@/lib/preferences/repository";
@@ -21,16 +23,25 @@ export class FirestoreAccountDataRepository {
   ) {}
 
   async export(userId: string): Promise<ResumeMatchDataExport> {
-    const [savedPreferences, savedResume, privacySettings, points] =
+    const [
+      savedPreferences,
+      savedResume,
+      privacySettings,
+      points,
+      applications,
+      applicationSettings,
+    ] =
       await Promise.all([
         preferencesRepository.get(userId),
         savedResumeRepository.get(userId),
         resumePrivacyRepository.get(userId),
         pointsRepository.get(userId, { historyLimit: null }),
+        applicationsRepository.list(userId, { limit: null }),
+        applicationSettingsRepository.get(userId),
       ]);
 
     return {
-      schemaVersion: 3,
+      schemaVersion: 5,
       generatedAt: this.now().toISOString(),
       data: {
         savedPreferences,
@@ -38,6 +49,8 @@ export class FirestoreAccountDataRepository {
         aiCandidateProfile: savedResume?.profile ?? null,
         privacySettings,
         points,
+        applications,
+        applicationSettings,
       },
     };
   }

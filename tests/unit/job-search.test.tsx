@@ -19,6 +19,11 @@ const pointMocks = vi.hoisted(() => ({
   awardGuest: vi.fn(),
   awardSignedIn: vi.fn(),
 }));
+const applicationMocks = vi.hoisted(() => ({ track: vi.fn() }));
+
+vi.mock("@/lib/applications/client", () => ({
+  trackResumeMatchJob: applicationMocks.track,
+}));
 
 vi.mock("@/lib/jobs/client", () => ({
   searchJobs: clientMocks.searchJobs,
@@ -91,6 +96,11 @@ const REWARD_CONTEXT = {
   clickTokens: ["token-one", "token-two", "token-three"],
 };
 const GUEST_IDENTITY = { kind: "guest" as const };
+const SIGNED_IN_USER = {
+  uid: "signed-in-user",
+  getIdToken: vi.fn().mockResolvedValue("test-token"),
+};
+const USER_IDENTITY = { kind: "user" as const, user: SIGNED_IN_USER as never };
 
 describe("JobSearch", () => {
   beforeEach(() => {
@@ -101,6 +111,28 @@ describe("JobSearch", () => {
       bonusAwarded: false,
     });
     pointMocks.awardSignedIn.mockReset();
+    applicationMocks.track.mockReset().mockResolvedValue({
+      application: {
+        ...JOBS[0],
+        id: "tracked-job",
+        jobUrl: JOBS[0].applyUrl,
+        source: "JSearch",
+        sourceJobId: JOBS[0].id,
+        origin: "resumematch",
+        status: "Applying",
+        dateAdded: "2026-09-02T18:00:00.000Z",
+        appliedDate: null,
+        lastUpdated: "2026-09-02T18:00:00.000Z",
+        lastActivityAt: "2026-09-02T18:00:00.000Z",
+        archived: false,
+        archivedAt: null,
+        archiveReason: null,
+        notes: "",
+        nextAction: null,
+        nextActionDate: null,
+      },
+      created: true,
+    });
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
       callback(0);
       return 1;
@@ -180,6 +212,30 @@ describe("JobSearch", () => {
       clickAwarded: true,
       bonusAwarded: false,
     });
+    expect(applicationMocks.track).not.toHaveBeenCalled();
+  });
+
+  it("tracks a signed-in Apply click as Applying without blocking the link", async () => {
+    clientMocks.searchJobs.mockResolvedValue({
+      jobs: JOBS,
+      rewardContext: REWARD_CONTEXT,
+    });
+    pointMocks.awardSignedIn.mockResolvedValue({
+      points: { balance: 10, totalEarned: 10, totalSpent: 0 },
+      clickAwarded: true,
+      bonusAwarded: false,
+    });
+    render(<JobSearch profile={PROFILE} identity={USER_IDENTITY} />);
+    fireEvent.click(screen.getByRole("button", { name: "Find 3 job matches" }));
+
+    const links = await screen.findAllByRole("link", { name: /view & apply/i });
+    expect(links[0].getAttribute("target")).toBe("_blank");
+    fireEvent.click(links[0]);
+
+    expect(applicationMocks.track).toHaveBeenCalledWith(SIGNED_IN_USER, JOBS[0]);
+    expect(
+      await screen.findByText("Saved to Applications as Applying."),
+    ).toBeTruthy();
   });
 
   it("shows a safe retry action after a failed search", async () => {

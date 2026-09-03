@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { PreferenceIdentity } from "@/components/job-preferences";
+import { trackResumeMatchJob } from "@/lib/applications/client";
 import type { ResumeProfile } from "@/lib/analysis/types";
 import {
   JobSearchClientError,
@@ -147,8 +148,13 @@ export function JobSearch({
 }) {
   const [state, setState] = useState<JobSearchState>({ status: "idle" });
   const [rewardMessage, setRewardMessage] = useState<string | null>(null);
+  const [trackingMessage, setTrackingMessage] = useState<{
+    kind: "success" | "error";
+    text: string;
+  } | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const rewardTimeoutRef = useRef<number | null>(null);
+  const trackingTimeoutRef = useRef<number | null>(null);
   const headingRef = useRef<HTMLHeadingElement | null>(null);
 
   useEffect(() => {
@@ -156,6 +162,9 @@ export function JobSearch({
       requestRef.current?.abort();
       if (rewardTimeoutRef.current !== null) {
         window.clearTimeout(rewardTimeoutRef.current);
+      }
+      if (trackingTimeoutRef.current !== null) {
+        window.clearTimeout(trackingTimeoutRef.current);
       }
     };
   }, []);
@@ -248,6 +257,43 @@ export function JobSearch({
       );
     },
     [identity, showReward],
+  );
+
+  const handleApply = useCallback(
+    (
+      job: JobMatch,
+      jobIndex: number,
+      rewardContext: JobClickRewardContext | null,
+    ) => {
+      if (rewardContext) handleJobClick(rewardContext, jobIndex);
+      if (identity.kind !== "user") return;
+
+      setTrackingMessage(null);
+      void trackResumeMatchJob(identity.user, job).then(
+        (result) => {
+          setTrackingMessage({
+            kind: "success",
+            text: result.created
+              ? "Saved to Applications as Applying."
+              : "Already in Applications; your existing status was kept.",
+          });
+          if (trackingTimeoutRef.current !== null) {
+            window.clearTimeout(trackingTimeoutRef.current);
+          }
+          trackingTimeoutRef.current = window.setTimeout(() => {
+            setTrackingMessage(null);
+            trackingTimeoutRef.current = null;
+          }, 4_000);
+        },
+        () => {
+          setTrackingMessage({
+            kind: "error",
+            text: "The job opened, but we couldn't add it to Applications.",
+          });
+        },
+      );
+    },
+    [handleJobClick, identity],
   );
 
   const heading =
@@ -349,15 +395,22 @@ export function JobSearch({
                   {rewardMessage}
                 </p>
               )}
+              {trackingMessage && (
+                <p
+                  className={`job-tracking-status job-tracking-status--${trackingMessage.kind}`}
+                  role={trackingMessage.kind === "error" ? "alert" : "status"}
+                  aria-live="polite"
+                >
+                  {trackingMessage.text}
+                </p>
+              )}
               <ol className="job-list" aria-label="Relevant job matches">
                 {state.jobs.map((job, jobIndex) => (
                   <JobCard
                     key={job.id}
                     job={job}
                     onApply={() => {
-                      if (state.rewardContext) {
-                        handleJobClick(state.rewardContext, jobIndex);
-                      }
+                      handleApply(job, jobIndex, state.rewardContext);
                     }}
                   />
                 ))}
@@ -379,7 +432,8 @@ export function JobSearch({
             >
               JSearch by OpenWeb Ninja
             </a>
-            . ResumeMatch does not persist these results.
+            . Results stay in this session unless a signed-in user opens Apply,
+            which adds that job to Applications.
           </p>
         </>
       )}

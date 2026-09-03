@@ -174,6 +174,40 @@ describe("Firestore job-preference rules", () => {
     await assertFails(deleteDoc(doc(aliceDb, ALICE_PREFERENCES_PATH)));
   });
 
+  it("keeps application tracker documents server-only", async () => {
+    const aliceDb = testEnvironment.authenticatedContext("alice").firestore();
+    const applicationRef = doc(
+      aliceDb,
+      "users/alice/applications/url_example",
+    );
+
+    await assertFails(
+      setDoc(applicationRef, {
+        schemaVersion: 1,
+        title: "Software Engineer",
+        company: "Example",
+        status: "Applying",
+        dateAdded: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
+      }),
+    );
+    await assertFails(getDoc(applicationRef));
+    await assertFails(
+      getDocs(collection(aliceDb, "users/alice/applications")),
+    );
+    await assertFails(
+      setDoc(doc(aliceDb, "users/alice/settings/applications"), {
+        schemaVersion: 1,
+        autoArchiveDays: 30,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(
+      getDoc(doc(aliceDb, "users/alice/settings/applications")),
+    );
+  });
+
   it.each([
     ["a missing required field", { updatedAt: undefined }],
     ["an unsupported schema version", { schemaVersion: 1 }],

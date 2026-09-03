@@ -35,7 +35,7 @@ users/{uid}/resumeProfiles/current
 It contains normalized extracted resume text and the latest AI candidate profile, when one has been generated. The original PDF or DOCX file is never stored.
 
 ```text
-schemaVersion: 1
+schemaVersion: 2
 resumeText: string
 profile: ResumeProfile | null
 createdAt: timestamp
@@ -58,6 +58,56 @@ updatedAt: timestamp
 If this document does not exist, `saveResumeData` defaults to `true`. When it is `false`, new resume text and AI profiles remain in the current page session. Job preferences continue to save normally. Resume writes read this setting within the same Firestore transaction as the write, so a concurrent setting change prevents a stale write from committing.
 
 Guest preferences are stored in browser `sessionStorage`. Guest resume text and profiles stay in the current page session and are never written to Firestore.
+
+## Job applications
+
+Authenticated users' tracker entries are stored at:
+
+```text
+users/{uid}/applications/{applicationId}
+```
+
+```text
+schemaVersion: 1
+title: string
+company: string
+location: string
+salary: string | null
+jobUrl: string | null
+source: string
+sourceJobId: string | null
+origin: "resumematch" | "manual"
+status: "Applying" | "Applied" | "Assessment" | "Interview" | "Offer" | "Rejected" | "Withdrawn"
+dateAdded: timestamp
+appliedDate: YYYY-MM-DD string | null
+lastUpdated: timestamp
+lastActivityAt: timestamp
+notes: string
+nextAction: string | null
+nextActionDate: YYYY-MM-DD string | null
+archived: boolean
+archivedAt: timestamp | null
+archiveReason: "manual" | "inactivity" | null
+```
+
+Entries with a job URL use a deterministic SHA-256 document ID derived from the normalized URL. Creating an entry for that URL is transactional and idempotent, so repeated ResumeMatch Apply clicks do not create duplicates or change the existing status; they do count as activity. ResumeMatch-created entries begin at `Applying`; opening the external page never implies that an application was submitted. Moving an entry to `Applied` sets its applied date when none was supplied.
+
+Schema-version-1 application documents remain readable. Their existing `lastUpdated` timestamp is treated as `lastActivityAt`, and they are upgraded on their next write or archival event.
+
+Application inactivity settings are stored at:
+
+```text
+users/{uid}/settings/applications
+
+schemaVersion: 1
+autoArchiveDays: 14 | 30 | 60 | 90 | null
+createdAt: timestamp
+updatedAt: timestamp
+```
+
+Missing settings default to 30 days; `null` means Never. When applications are loaded, the server transactionally archives active entries whose `lastActivityAt` is at least the configured number of days old. `Interview` and `Offer` entries are exempt. Automatic or manual archiving changes only the archive fields and `lastUpdated`; it never changes status. Status, applied-date, notes, and next-action edits update both `lastUpdated` and `lastActivityAt`. Restoring an entry also resets activity so it is not immediately re-archived.
+
+The applications API is authenticated and server-managed. Guests can view the Applications sign-in prompt, but no guest application data is retained. Origin and source fields leave a stable boundary for future ingestion such as Gmail-derived events; no email access or processing is implemented.
 
 ## Points and rewards
 
@@ -97,7 +147,7 @@ Each successful live job search receives one opaque reward token per displayed c
 
 ## Account data actions
 
-`POST /api/account/data` reads the current preference, saved-resume, privacy, and points data, builds a JSON export containing `savedPreferences`, `extractedResumeText`, `aiCandidateProfile`, `privacySettings`, and `points`, and emails it only to the verified email address in the authenticated Firebase token. The client cannot provide or override the recipient.
+`POST /api/account/data` reads the current preference, saved-resume, privacy, points, application, and application-setting data, builds a JSON export containing `savedPreferences`, `extractedResumeText`, `aiCandidateProfile`, `privacySettings`, `points`, `applications`, and `applicationSettings`, and emails it only to the verified email address in the authenticated Firebase token. The client cannot provide or override the recipient.
 
 `DELETE /api/resumes/saved` deletes only `users/{uid}/resumeProfiles/current`. It is used when a user turns resume saving off and chooses to remove the previously stored resume text and AI profile. Preferences and the privacy setting are not deleted.
 
@@ -105,9 +155,9 @@ Each successful live job search receives one opaque reward token per displayed c
 
 ## Security boundary
 
-- Preference, saved-resume, privacy-setting, points, export, and deletion API calls require a verified Firebase ID token.
+- Preference, saved-resume, privacy-setting, points, application, export, and deletion API calls require a verified Firebase ID token.
 - The UID always comes from the verified token, never request JSON, query parameters, or a browser-selected path.
 - Data exports require a verified email claim and use it as the sole recipient.
-- The preference, privacy-setting, and saved-resume APIs apply strict schema and size validation.
-- Firestore rules allow owner-scoped reads of preferences, point aggregates, and point history. Point writes, reward eligibility, and resume profiles remain server-managed; unmatched paths are denied.
+- The preference, privacy-setting, saved-resume, and application APIs apply strict schema and size validation.
+- Firestore rules allow owner-scoped reads of preferences, point aggregates, and point history. Point writes, reward eligibility, resume profiles, and applications remain server-managed; unmatched paths are denied.
 - Firebase Admin operations bypass Firestore rules, so API authentication, validation, and exact path construction remain mandatory.
